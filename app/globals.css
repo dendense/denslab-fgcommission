@@ -601,3 +601,53 @@ fieldset legend,
     padding-top: 40px;
   }
 }
+
+/* ---------------------------------------------------------------- admin nav */
+
+/* The bar sits outside each page's <main className="shell">, so it repeats the shell's
+   max width and side padding instead of nesting a second one (which would double both).
+   It sticks to the top because the event editor is long and the tabs are the only way
+   back to the list. */
+.admin-nav-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-nav-inner {
+  width: 100%;
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.admin-nav {
+  display: flex;
+  gap: 4px;
+}
+
+.admin-nav__tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.admin-nav__tab:hover {
+  color: var(--ink);
+}
+
+/* Active tab: colour + weight + underline, not colour alone — a 2px underline under the
+   label is the cue that survives a greyscale screenshot or a colour-vision deficiency. */
+.admin-nav__tab[aria-current="page"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+

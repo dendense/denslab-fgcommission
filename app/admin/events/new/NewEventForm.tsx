@@ -14,14 +14,22 @@ import { postJson, type ApiFailure } from "../../_api";
  * RPC call in the UI to undo it, and the draft is harmless (it is not published).
  *
  * No description field: `events` has no description column (0001).
+ *
+ * `photographerId` switches the submit to the admin "on behalf of" path — a different route
+ * and RPC, and no first day in the same submit. Without the prop the behaviour is exactly
+ * what it was before (create_event + create_event_day).
  */
-export function NewEventForm() {
+export function NewEventForm({ photographerId }: { photographerId?: string } = {}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<ApiFailure | null>(null);
   // Set when the event landed but the day did not: the draft exists, so the message
   // must link to it instead of inviting a retry that would create a second event.
   const [orphan, setOrphan] = useState<{ id: string; message: string } | null>(null);
+
+  // Admin creating on behalf of a photographer: different RPC, different route, and no day
+  // in the same submit (0007's create_event_day cannot write to someone else's event).
+  const forOther = !!photographerId;
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -40,6 +48,32 @@ export function NewEventForm() {
       setFailure({ error: "invalid_title", message: "Judul tidak boleh kosong." });
       return;
     }
+
+    if (forOther) {
+      setBusy(true);
+      const created = await postJson<{ event: { id: string } }>("/api/admin/users/events", {
+        photographer_id: photographerId,
+        title,
+        location: location || null,
+      });
+
+      if (!created.ok) {
+        setBusy(false);
+        setFailure(created.failure);
+        return;
+      }
+
+      const id = created.data.event?.id;
+      if (!id) {
+        setBusy(false);
+        setFailure({ error: "server_error", message: "Event dibuat tapi id-nya tidak terbaca." });
+        return;
+      }
+
+      router.push(`/admin/events/${id}`);
+      return;
+    }
+
     if (!dayDate) {
       setFailure({ error: "invalid_date", message: "Tanggal hari pertama wajib diisi." });
       return;
@@ -144,29 +178,34 @@ export function NewEventForm() {
         <p className="hint">Boleh dikosongkan kalau belum pasti.</p>
       </div>
 
-      <fieldset className="stack" style={{ border: 0 }}>
-        <legend className="field-label">Hari pertama</legend>
-        <p className="lede">
-          Event tanpa hari tidak bisa diterbitkan. Hari lain bisa ditambahkan setelahnya.
-        </p>
+      {/* The day fieldset is hidden on the ?for= path: create_event_day (0007) only writes
+          to an event owned by the caller, so a date typed here would be discarded. Better
+          to not ask than to silently drop an answer. */}
+      {forOther ? null : (
+        <fieldset className="stack" style={{ border: 0 }}>
+          <legend className="field-label">Hari pertama</legend>
+          <p className="lede">
+            Event tanpa hari tidak bisa diterbitkan. Hari lain bisa ditambahkan setelahnya.
+          </p>
 
-        <div className="field">
-          <label htmlFor="day_date">Tanggal</label>
-          <input id="day_date" name="day_date" type="date" required />
-        </div>
+          <div className="field">
+            <label htmlFor="day_date">Tanggal</label>
+            <input id="day_date" name="day_date" type="date" required />
+          </div>
 
-        <div className="field">
-          <label htmlFor="start_time">Jam mulai</label>
-          <input id="start_time" name="start_time" type="time" required defaultValue="09:00" />
-        </div>
+          <div className="field">
+            <label htmlFor="start_time">Jam mulai</label>
+            <input id="start_time" name="start_time" type="time" required defaultValue="09:00" />
+          </div>
 
-        <div className="field">
-          <label htmlFor="end_time">Jam selesai</label>
-          <input id="end_time" name="end_time" type="time" required defaultValue="17:00" />
-        </div>
+          <div className="field">
+            <label htmlFor="end_time">Jam selesai</label>
+            <input id="end_time" name="end_time" type="time" required defaultValue="17:00" />
+          </div>
 
-        <p className="hint">Jam dalam WIB (Asia/Jakarta).</p>
-      </fieldset>
+          <p className="hint">Jam dalam WIB (Asia/Jakarta).</p>
+        </fieldset>
+      )}
 
       {failure ? (
         <p className="notice notice--warn" role="alert">
