@@ -10,7 +10,7 @@ import { requireUser } from "@/lib/auth";
 import type { PublicEvent } from "@/lib/types";
 
 /**
- * GET /api/admin/events/[slug] — admin event payload, every slot included.
+ * GET /api/admin/events/by-slug/[slug] — admin event payload, every slot included.
  *
  * Same JSON shape as GET /api/events/[slug] (both come from a function with the
  * same projection), but through `admin_event`, which does not filter out `closed`
@@ -38,7 +38,7 @@ export async function GET(
           { status: 403 },
         );
       }
-      console.error("GET /api/admin/events/[slug]", error);
+      console.error("GET /api/admin/events/by-slug/[slug]", error);
       return Response.json(
         { error: "server_error", message: "Gagal memuat event." },
         { status: 500 },
@@ -60,7 +60,7 @@ export async function GET(
   } catch (err) {
     const cfg = configErrorResponse(err);
     if (cfg) return cfg;
-    console.error("GET /api/admin/events/[slug]", err);
+    console.error("GET /api/admin/events/by-slug/[slug]", err);
     return Response.json(
       { error: "server_error", message: "Terjadi kesalahan di server." },
       { status: 500 },

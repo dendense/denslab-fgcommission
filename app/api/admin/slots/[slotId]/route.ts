@@ -1,25 +1,30 @@
-// Admin slot toggle — user session, not service role.
+// Edit or delete a slot — user session, not service role.
 //
-// Since 0004 the `set_slot_status` RPC authorises against `auth.uid()` and raises
-// `not_owner` for anyone else, so the service role key (no `auth.uid()`) can no
-// longer drive this route. The session client carries the logged-in photographer's
-// JWT, which is exactly what the RPC checks.
+// `slots` is read-only for `authenticated` since 0006. Three RPCs behind this path:
+//   PATCH  { status }                          → set_slot_status  (0002 + 0004)
+//   PATCH  { price_idr?, starts_at?, ends_at? } → update_slot      (0006)
+//   DELETE                                     → delete_slot      (0006)
+// The UI never offers price/time edits on a `booked` slot, but the RPC refuses them
+// anyway (`slot_booked`) — the rule lives in the database, not in a disabled button.
 
 import { configErrorResponse } from "@/lib/supabase";
 import { requireUser } from "@/lib/auth";
 import { isUuid } from "@/lib/bookings";
+import { rpcFailure } from "@/lib/rpc-error";
+
+const SLOT_OVERRIDES = { not_owner: "Slot ini bukan milik akunmu." };
+
+type Body = {
+  status?: unknown;
+  price_idr?: unknown;
+  starts_at?: unknown;
+  ends_at?: unknown;
+};
 
 /**
  * PATCH /api/admin/slots/[slotId]
- * body: { status: "open" | "closed" }
- *
- * All rules live in the `set_slot_status` RPC (supabase/migrations/0002_slot_status.sql,
- * user-scoped by 0004): status validation, ownership, and refusal to touch a slot
- * that already has a booking. This route only maps the RPC's exceptions to HTTP codes.
+ * body: { status: "open" | "closed" } | { price_idr?, starts_at?, ends_at? }
  */
-
-type Body = { status?: unknown };
-
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ slotId: string }> },
@@ -32,7 +37,7 @@ export async function PATCH(
 
   if (!isUuid(slotId)) {
     return Response.json(
-      { error: "not_found", message: "Slot tidak ditemukan." },
+      { error: "slot_not_found", message: "Slot tidak ditemukan." },
       { status: 404 },
     );
   }
@@ -47,73 +52,115 @@ export async function PATCH(
     );
   }
 
-  const status = typeof body.status === "string" ? body.status.trim() : "";
-  if (status !== "open" && status !== "closed") {
-    return Response.json(
-      { error: "invalid_status", message: 'status harus "open" atau "closed".' },
-      { status: 400 },
-    );
-  }
-
   try {
-    const { data, error } = await guard.supabase.rpc("set_slot_status", {
-      p_slot_id: slotId,
-      p_status: status,
-    });
-
-    if (error) {
-      const message = error.message ?? "";
-
-      if (/not_owner/.test(message)) {
-        // 403, not 400: the caller is logged in, the slot just isn't theirs. The UI
-        // shows a different message for this than for a malformed request.
-        return Response.json(
-          { error: "not_owner", message: "Slot ini bukan milik akunmu." },
-          { status: 403 },
-        );
-      }
-      if (/slot_not_found/.test(message)) {
-        return Response.json(
-          { error: "not_found", message: "Slot tidak ditemukan." },
-          { status: 404 },
-        );
-      }
-      if (/slot_booked/.test(message)) {
-        return Response.json(
-          {
-            error: "slot_booked",
-            message: "Slot ini sudah punya booking. Batalkan booking dulu.",
-          },
-          { status: 409 },
-        );
-      }
-      if (/invalid_status/.test(message)) {
+    // Status toggle: its own RPC, its own validation.
+    if (body.status !== undefined) {
+      const status = typeof body.status === "string" ? body.status.trim() : "";
+      if (status !== "open" && status !== "closed") {
         return Response.json(
           { error: "invalid_status", message: 'status harus "open" atau "closed".' },
           { status: 400 },
         );
       }
 
-      console.error("set_slot_status failed", error);
+      const { data, error } = await guard.supabase.rpc("set_slot_status", {
+        p_slot_id: slotId,
+        p_status: status,
+      });
+
+      if (error) {
+        const failure = rpcFailure(error, SLOT_OVERRIDES);
+        if (failure.status === 500) console.error("set_slot_status failed", error);
+        return Response.json(failure, { status: failure.status });
+      }
+
+      const slot = Array.isArray(data) ? data[0] : data;
+      return Response.json({ slot }, { headers: { "Cache-Control": "no-store" } });
+    }
+
+    // Price / time edit.
+    const price = body.price_idr === undefined ? null : Number(body.price_idr);
+    const startsAt = typeof body.starts_at === "string" ? body.starts_at : null;
+    const endsAt = typeof body.ends_at === "string" ? body.ends_at : null;
+
+    if (price !== null && (!Number.isInteger(price) || price < 0)) {
       return Response.json(
-        { error: "server_error", message: "Gagal mengubah status slot." },
-        { status: 500 },
+        { error: "invalid_price", message: "Harga harus angka ≥ 0." },
+        { status: 400 },
       );
+    }
+    for (const iso of [startsAt, endsAt]) {
+      if (iso !== null && !Number.isFinite(Date.parse(iso))) {
+        return Response.json(
+          { error: "invalid_time", message: "Jam slot tidak valid." },
+          { status: 400 },
+        );
+      }
+    }
+    if (price === null && startsAt === null && endsAt === null) {
+      return Response.json(
+        { error: "invalid_request", message: "Tidak ada yang diubah." },
+        { status: 400 },
+      );
+    }
+
+    const { data, error } = await guard.supabase.rpc("update_slot", {
+      p_slot_id: slotId,
+      p_price_idr: price,
+      p_starts_at: startsAt,
+      p_ends_at: endsAt,
+    });
+
+    if (error) {
+      const failure = rpcFailure(error, SLOT_OVERRIDES);
+      if (failure.status === 500) console.error("update_slot failed", error);
+      return Response.json(failure, { status: failure.status });
     }
 
     const slot = Array.isArray(data) ? data[0] : data;
-    if (!slot) {
-      return Response.json(
-        { error: "not_found", message: "Slot tidak ditemukan." },
-        { status: 404 },
-      );
-    }
-
     return Response.json({ slot }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     const cfg = configErrorResponse(err);
     if (cfg) return cfg;
     console.error("PATCH /api/admin/slots/[slotId]", err);
+    return Response.json(
+      { error: "server_error", message: "Terjadi kesalahan di server." },
+      { status: 500 },
+    );
+  }
+}
+
+/** DELETE /api/admin/slots/[slotId] — refused when the slot is booked (`slot_booked`). */
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ slotId: string }> },
+) {
+  const { slotId } = await params;
+
+  const guard = await requireUser();
+  if (!guard.ok) return guard.response;
+
+  if (!isUuid(slotId)) {
+    return Response.json(
+      { error: "slot_not_found", message: "Slot tidak ditemukan." },
+      { status: 404 },
+    );
+  }
+
+  try {
+    const { error } = await guard.supabase.rpc("delete_slot", { p_slot_id: slotId });
+
+    if (error) {
+      const failure = rpcFailure(error, SLOT_OVERRIDES);
+      if (failure.status === 500) console.error("delete_slot failed", error);
+      return Response.json(failure, { status: failure.status });
+    }
+
+    return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+  } catch (err) {
+    const cfg = configErrorResponse(err);
+    if (cfg) return cfg;
+    console.error("DELETE /api/admin/slots/[slotId]", err);
     return Response.json(
       { error: "server_error", message: "Terjadi kesalahan di server." },
       { status: 500 },
