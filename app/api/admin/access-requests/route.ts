@@ -20,7 +20,9 @@ export async function GET(request: Request) {
   try {
     let query = guard.supabase
       .from("access_requests")
-      .select("id,user_id,email,display_name,contact_wa,status,requested_at,decided_at,note")
+      .select(
+        "id,user_id,email,display_name,studio_name,contact_wa,status,requested_at,decided_at,note",
+      )
       .order("requested_at", { ascending: true });
 
     if (!all) query = query.eq("status", "pending");
@@ -115,6 +117,16 @@ export async function POST(request: Request) {
               action === "approve"
                 ? "Permintaan ini sudah ditolak sebelumnya."
                 : "Permintaan ini sudah diputuskan.",
+          },
+          { status: 409 },
+        );
+      }
+      if (/incomplete_registration/.test(message)) {
+        return Response.json(
+          {
+            error: "incomplete_registration",
+            message:
+              "Pendaftar ini belum mengisi nama studio dan nomor WA, jadi studio belum bisa dibuat. Minta dia melengkapi data di halaman onboarding.",
           },
           { status: 409 },
         );

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { browserClient } from "@/lib/supabase-browser";
 import { waValid } from "@/lib/format";
+import { GoogleButton } from "@/app/_components/GoogleButton";
 
 /**
  * The signup form itself. Rendered by ./page.tsx only for a visitor without a session —
@@ -91,6 +92,15 @@ export function RegisterForm() {
             kami kabari setelah aktif.
           </p>
         </header>
+
+        <div className="stack">
+          <GoogleButton />
+          <p className="center lede">
+            atau isi data di bawah. Akun Google langsung masuk antrian persetujuan tanpa
+            perlu mengisi nama dan nomor WA di sini — data studio dilengkapi di halaman
+            berikutnya.
+          </p>
+        </div>
 
         <form className="card stack" onSubmit={submit} noValidate>
           <div className="field">

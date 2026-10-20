@@ -220,7 +220,7 @@ async function Content() {
 async function readPending(supabase: SupabaseClient) {
   const { data, error } = await supabase
     .from("access_requests")
-    .select("id,email,display_name,contact_wa,status,requested_at")
+    .select("id,email,display_name,studio_name,contact_wa,status,requested_at")
     .eq("status", "pending")
     .order("requested_at", { ascending: true });
 

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { MissingConfigError } from "@/lib/supabase";
@@ -33,19 +34,21 @@ export const instant = false;
  * A schema error is not "not approved" — it means the database is not ready, and it gets
  * the card that prints the PostgREST code instead of a wrong verdict.
  */
-export default function Page() {
+type Props = { searchParams: Promise<{ error?: string }> };
+
+export default function Page({ searchParams }: Props) {
   return (
     <main className="shell">
-      <View />
+      <View searchParams={searchParams} />
     </main>
   );
 }
 
-async function View() {
+async function View({ searchParams }: Props) {
   await connection();
 
   try {
-    return await Content();
+    return await Content(searchParams);
   } catch (err) {
     if (err instanceof MissingConfigError) return <ServerNotReady />;
     if (err instanceof DbNotMigratedError) return <DbNotReady error={err} />;
@@ -53,12 +56,18 @@ async function View() {
   }
 }
 
-async function Content() {
+async function Content(searchParams: Props["searchParams"]) {
+  const { error: searchError } = await searchParams;
+
   const supabase = await sessionClient();
 
   const { data: auth, error: authError } = await supabase.auth.getUser();
   // No session: the public path. This is the page's reason to exist.
   if (authError || !auth.user) return <RegisterForm />;
+
+  // Arrived from /auth/callback with a session but no `access_requests` row: say so here,
+  // where the form is, instead of leaving them on a page that looks like a fresh signup.
+  if (searchError === "no_registration") return <NoRegistration />;
 
   const { data: studioId, error: studioError } = await supabase.rpc("current_photographer_id");
 
@@ -73,6 +82,22 @@ async function Content() {
 
   // Signed in, no studio, not an admin: the signup is in the approval queue.
   return <Pending email={auth.user.email ?? ""} />;
+}
+
+function NoRegistration() {
+  return (
+    <div className="card stack">
+      <p className="eyebrow">Pendaftaran tidak ditemukan</p>
+      <h1>Akun ini belum punya pendaftaran.</h1>
+      <p className="lede">
+        Login berhasil, tapi tidak ada permintaan akses studio yang tertaut ke akun ini.
+        Daftar dulu supaya admin bisa meninjau; akun yang sama akan dipakai lagi.
+      </p>
+      <Link className="btn btn--primary" href="/register">
+        Daftar sekarang
+      </Link>
+    </div>
+  );
 }
 
 function Pending({ email }: { email: string }) {

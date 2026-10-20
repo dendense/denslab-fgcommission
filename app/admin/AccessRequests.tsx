@@ -7,10 +7,34 @@ export type AccessRequest = {
   id: string;
   email: string;
   display_name: string | null;
+  studio_name: string | null;
   contact_wa: string | null;
   status: "pending" | "approved" | "rejected";
   requested_at: string;
 };
+
+/**
+ * Who this request is, in one line.
+ *
+ * `studio_name` first: that is the name the applicant chose for himself and the one
+ * `approve_access_request()` (0013) writes to `photographers.display_name`. `display_name`
+ * is what 0005's trigger copied out of signup metadata — a Google signup has none (Google
+ * sends `full_name`), which is why this queue used to show "Tanpa nama". Email is the last
+ * resort: it always exists, and it is what Deny would search by anyway.
+ */
+function identityOf(request: AccessRequest): string {
+  return (
+    request.studio_name?.trim() ||
+    request.display_name?.trim() ||
+    request.email ||
+    "Tanpa nama"
+  );
+}
+
+/** Onboarding (0013) fills both; either one missing makes Approve fail. */
+function needsOnboarding(request: AccessRequest): boolean {
+  return !request.studio_name?.trim() || !request.contact_wa?.trim();
+}
 
 /**
  * Pending queue + Approve/Reject.
@@ -63,14 +87,23 @@ export function AccessRequests({ initial }: { initial: AccessRequest[] }) {
       {initial.map((request) => {
         const working = busy === request.id;
         const rowError = error?.id === request.id ? error.message : null;
+        const waiting = needsOnboarding(request);
 
         return (
           <div className="slot-row" key={request.id}>
             <div>
-              <div className="slot__time">{request.display_name || "Tanpa nama"}</div>
+              <div className="slot__time">{identityOf(request)}</div>
               <div className="slot__status mono">{request.email}</div>
               {request.contact_wa ? (
                 <div className="slot__status mono">{request.contact_wa}</div>
+              ) : null}
+              {/* Shown, not enforced: the Approve button stays visible and the RPC's
+                  `incomplete_registration` is what explains the refusal. Hiding the
+                  button would leave Deny wondering why this row has none. */}
+              {waiting ? (
+                <div className="slot__status">
+                  <span className="badge badge--draft">belum isi data studio</span>
+                </div>
               ) : null}
             </div>
 

@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { browserClient } from "@/lib/supabase-browser";
 import { isSchemaError, type DbError } from "@/lib/db-errors";
 import { DbNotReady } from "@/app/_components/DbNotReady";
+import { GoogleButton } from "@/app/_components/GoogleButton";
+import { OAuthErrorNotice } from "./OAuthErrorNotice";
 
 /**
  * Login form. Text is Indonesian, matching the rest of the app.
@@ -149,6 +151,14 @@ export default function LoginPage() {
           <h1>Login fotografer</h1>
           <p className="lede">Kelola jadwal dan slot sesi foto kamu.</p>
         </header>
+
+        <div className="stack">
+          <Suspense fallback={null}>
+            <OAuthErrorNotice />
+          </Suspense>
+          <GoogleButton />
+          <p className="center lede">atau pakai email dan password</p>
+        </div>
 
         <form className="card stack" onSubmit={submit} noValidate>
           <div className="field">
