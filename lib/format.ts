@@ -32,7 +32,9 @@ export function dateWIB(iso: string): string {
 }
 
 export function rupiah(idr: number): string {
-  return `Rp ${moneyFmt.format(idr)}`;
+  // "Rp75.000", no space: the card's house style, and it keeps the admin slot editor
+  // and the public page reading the same string.
+  return `Rp${moneyFmt.format(idr)}`;
 }
 
 /** Indonesian mobile: 08…, +628…, or 628…. Mirrors the server's normaliseWa. */

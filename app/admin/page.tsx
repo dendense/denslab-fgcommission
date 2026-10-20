@@ -3,14 +3,13 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { MissingConfigError } from "@/lib/supabase";
 import { isAdmin, sessionClient } from "@/lib/auth";
+import { listEvents, slotCounts, firstDayDate, type AdminEvent } from "@/lib/admin-events";
 import { ServerNotReady } from "@/app/_components/ServerNotReady";
-import type { PublicEvent } from "@/lib/types";
-import { QrCard } from "./QrCard";
-import { AdminSlots } from "./AdminSlots";
+import { dateWIB } from "@/lib/format";
 import { AccessRequests, type AccessRequest } from "./AccessRequests";
 import { LogoutButton } from "./LogoutButton";
 
-export const metadata = { title: "Admin — Slot & QR" };
+export const metadata = { title: "Admin — Event" };
 
 // Opted out of the static-shell check: everything here depends on the session.
 export const instant = false;
@@ -38,6 +37,11 @@ async function AdminView() {
   }
 }
 
+/**
+ * Session + studio are read here rather than through requireStudio() on purpose:
+ * requireStudio() sends a signed-in user without a studio row to /admin, which is this
+ * page — a redirect loop. The "menunggu persetujuan" card is the real destination.
+ */
 async function Content() {
   const supabase = await sessionClient();
 
@@ -85,16 +89,14 @@ async function Content() {
 
   const admin = await isAdmin(supabase);
 
-  // `admin_event` returns every slot including `closed` (0003/0004) and refuses
-  // events that are not this photographer's.
-  const { data: eventData, error: eventError } = await supabase.rpc("admin_event", {
-    p_slug: me.slug,
-  });
-  if (eventError) console.error("admin: admin_event", eventError);
-
-  const payload = eventError ? null : (eventData as Omit<PublicEvent, "timezone"> | null);
-  const slots = payload?.days.flatMap((d) => d.slots) ?? [];
-  const firstDay = payload?.days[0]?.day_date;
+  let events: AdminEvent[] = [];
+  let listError = false;
+  try {
+    events = await listEvents(supabase);
+  } catch (err) {
+    console.error("admin: events read", err);
+    listError = true;
+  }
 
   let pending: AccessRequest[] = [];
   if (admin) {
@@ -126,22 +128,64 @@ async function Content() {
         </section>
       ) : null}
 
-      {payload?.event ? (
-        <>
-          <QrCard slug={payload.event.slug} />
-          <AdminSlots slots={slots} dayDate={firstDay} />
-          <p className="center">
-            <Link className="btn btn--secondary" href={`/e/${payload.event.slug}`}>
-              Buka halaman publik
-            </Link>
+      <section className="stack">
+        <h2>Event</h2>
+
+        {listError ? (
+          <p className="notice notice--warn" role="alert">
+            Daftar event gagal dimuat. Coba muat ulang; kalau tetap gagal, hubungi admin.
           </p>
-        </>
-      ) : (
-        <p className="notice notice--warn">
-          Event belum bisa dimuat. Pastikan migrasi 0004 sudah dijalankan dan event
-          milik akun ini berstatus <em>published</em>.
-        </p>
-      )}
+        ) : events.length === 0 ? (
+          <>
+            <p className="notice notice--ok">
+              Belum ada event. Buat event pertamamu, lalu tambahkan hari dan slot supaya
+              klien bisa memesan.
+            </p>
+            <Link className="btn btn--primary" href="/admin/events/new">
+              Buat event
+            </Link>
+          </>
+        ) : (
+          <>
+            <p className="lede">
+              Ketuk event untuk mengatur hari, slot, dan tautan publiknya.
+            </p>
+
+            <div className="slots">
+              {events.map((event) => {
+                const { total, booked } = slotCounts(event);
+                const day = firstDayDate(event);
+                return (
+                  <Link className="event-row" href={`/admin/events/${event.id}`} key={event.id}>
+                    <span className="event-row__title">{event.title}</span>
+                    <span className="event-row__meta">
+                      {day ? dateWIB(`${day}T00:00:00+07:00`) : "Belum ada hari"}
+                    </span>
+                    <span className="event-row__meta">
+                      <span
+                        className={`badge badge--${
+                          event.status === "published" ? "published" : "draft"
+                        }`}
+                      >
+                        {event.status === "published"
+                          ? "Terbit"
+                          : event.status === "closed"
+                            ? "Ditutup"
+                            : "Draf"}
+                      </span>{" "}
+                      · {total} slot · {booked} terisi
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+
+            <Link className="btn btn--secondary" href="/admin/events/new">
+              Buat event
+            </Link>
+          </>
+        )}
+      </section>
 
       <LogoutButton />
     </div>
