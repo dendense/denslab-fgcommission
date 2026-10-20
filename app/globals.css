@@ -1,17 +1,32 @@
+/* Design tokens — one accent (vermilion) + warm neutrals. No gradients. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f7f5f2;
+  --surface: #ffffff;
+  --ink: #1a1a1a;
+  --muted: #5c5650;
+  --line: #e5e0d8;
+  --accent: #b33a12;
+  --accent-ink: #ffffff;
+  --accent-soft: #fbeee8;
+  --ok: #1f6b3a;
+  --ok-soft: #e8f3ec;
+  --warn-soft: #fdf1e3;
+  --warn-ink: #8a4b06;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --max: 480px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
 }
 
 html {
   height: 100%;
+  color-scheme: light;
+  -webkit-text-size-adjust: 100%;
 }
 
 html,
@@ -22,19 +37,13 @@ body {
 
 body {
   min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
 }
 
 a {
@@ -42,8 +51,429 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- layout */
+
+.shell {
+  width: 100%;
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 20px 16px calc(32px + env(safe-area-inset-bottom));
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin-bottom: 4px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.topbar a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-right: 8px;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.stack > * + * {
+  margin-top: 12px;
+}
+
+.eyebrow {
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+h1 {
+  font-size: 24px;
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+.lede {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.meta {
+  display: grid;
+  gap: 6px;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.meta strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.day-heading {
+  margin: 20px 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- slots */
+
+.slots {
+  display: grid;
+  gap: 10px;
+}
+
+.slot {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 14px;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.slot--open {
+  border-color: var(--accent);
+  cursor: pointer;
+}
+
+.slot--open:hover {
+  background: var(--accent-soft);
+}
+
+.slot--taken {
+  background: #f2efeb;
+  border-color: #8a8178; /* 3.5:1 against the page bg — the boundary is the only cue */
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.slot__time {
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.slot__price {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.slot__status {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.slot--open .slot__status {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.slot__badge {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.slot--taken .slot__badge {
+  background: #e7e2db;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- forms */
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.field .hint {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px;
+  font: inherit;
+  font-size: 16px; /* iOS: no zoom-on-focus below 16px */
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid #8a8178; /* 3.8:1 on white — WCAG 1.4.11 needs 3:1 for the control boundary */
+  border-radius: var(--radius-sm);
+}
+
+.field textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.field input[aria-invalid="true"],
+.field textarea[aria-invalid="true"] {
+  border-color: var(--accent);
+}
+
+.field-error {
+  font-size: 14px;
+  color: var(--accent);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.btn--primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.btn--primary:hover {
+  background: #96300e;
+}
+
+.btn--primary:disabled {
+  /* Disabled controls are exempt from WCAG 1.4.3, but a washed-out white-on-grey
+     (2.2:1) reads as "loading" rather than "unavailable". 6.5:1 says it plainly. */
+  background: #d9d3cb;
+  color: #4a443e;
+  cursor: not-allowed;
+}
+
+.btn--secondary {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: #8a8178; /* same 3:1 control-boundary requirement as inputs */
+}
+
+.btn--secondary:hover {
+  background: #f2efeb;
+}
+
+.btn--secondary:disabled {
+  /* The admin toggle buttons are inert until a slot-status endpoint exists; they
+     must not look tappable. */
+  color: var(--muted);
+  border-color: #b9aca4;
+  background: #f2efeb;
+  cursor: not-allowed;
+}
+
+.btn-row {
+  display: grid;
+  gap: 10px;
+}
+
+/* Two buttons side by side inside a row that already has a label column. */
+.btn-row--inline {
+  grid-auto-flow: column;
+}
+
+.btn-row--inline .btn {
+  width: auto;
+  min-height: 44px;
+  padding: 8px 14px;
+  font-size: 15px;
+}
+
+.link {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.notice {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.notice--warn {
+  background: var(--warn-soft);
+  border-color: #efd7b8;
+  color: var(--warn-ink);
+}
+
+.notice--ok {
+  background: var(--ok-soft);
+  border-color: #cfe4d6;
+  color: var(--ok);
+}
+
+/* ---------------------------------------------------------------- summary */
+
+.summary {
+  display: grid;
+  gap: 10px;
+  font-size: 15px;
+}
+
+.summary div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.summary div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.summary dt {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.summary dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+}
+
+.mono {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- admin */
+
+.qr {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+.qr img {
+  width: 100%;
+  max-width: 240px;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+
+.slot-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.slot-row .btn {
+  width: auto;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 15px;
+}
+
+/* Reason text and errors sit under the whole row, not in the button column. */
+.slot-row__note,
+.slot-row__error {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.slot-row__note {
+  color: var(--muted);
+}
+
+.slot-row__error {
+  color: var(--warn-ink);
+  background: var(--warn-soft);
+  border: 1px solid #efd7b8;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
+.center {
+  text-align: center;
+}
+
+.check {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 8px auto 0;
+  border-radius: 999px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+@media (min-width: 520px) {
+  .shell {
+    padding-top: 40px;
   }
 }
