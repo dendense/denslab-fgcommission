@@ -30,7 +30,7 @@ async function View({ params }: Props) {
     return await Content(params);
   } catch (err) {
     if (err instanceof MissingConfigError) return <ServerNotReady />;
-    if (err instanceof DbNotMigratedError) return <DbNotReady code={err.code} />;
+    if (err instanceof DbNotMigratedError) return <DbNotReady error={err} />;
     throw err;
   }
 }

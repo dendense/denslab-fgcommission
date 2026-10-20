@@ -30,7 +30,7 @@ async function View({ searchParams }: Props) {
     return await Content(searchParams);
   } catch (err) {
     if (err instanceof MissingConfigError) return <ServerNotReady />;
-    if (err instanceof DbNotMigratedError) return <DbNotReady code={err.code} />;
+    if (err instanceof DbNotMigratedError) return <DbNotReady error={err} />;
     throw err;
   }
 }

@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { browserClient } from "@/lib/supabase-browser";
-import { NOT_MIGRATED_TITLE, isSchemaError, notMigratedDetail } from "@/lib/db-errors";
+import { isSchemaError, type DbError } from "@/lib/db-errors";
+import { DbNotReady } from "@/app/_components/DbNotReady";
 
 /**
  * Login form. Text is Indonesian, matching the rest of the app.
@@ -36,7 +37,7 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [notReady, setNotReady] = useState<string | null>(null);
+  const [notReady, setNotReady] = useState<DbError | null>(null);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,7 +61,7 @@ export default function LoginPage() {
 
       if (rowError) {
         if (isSchemaError(rowError.code)) {
-          setNotReady(rowError.code as string);
+          setNotReady(rowError);
           return;
         }
         setError("Gagal memeriksa status akun. Coba lagi.");
@@ -73,7 +74,7 @@ export default function LoginPage() {
 
         if (adminError) {
           if (isSchemaError(adminError.code)) {
-            setNotReady(adminError.code as string);
+            setNotReady(adminError);
             return;
           }
           setError("Gagal memeriksa status akun. Coba lagi.");
@@ -113,15 +114,11 @@ export default function LoginPage() {
   if (notReady) {
     return (
       <main className="shell">
-        <div className="card stack">
-          <p className="eyebrow">Belum siap</p>
-          <h1>{NOT_MIGRATED_TITLE}</h1>
-          <p className="lede">{notMigratedDetail(notReady)}</p>
-          <p className="mono">kode error: {notReady}</p>
+        <DbNotReady error={notReady}>
           <button type="button" className="btn btn--secondary" onClick={logout}>
             Keluar
           </button>
-        </div>
+        </DbNotReady>
       </main>
     );
   }

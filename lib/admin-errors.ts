@@ -66,7 +66,12 @@ export function jsonError(name: string, overrides: Record<string, string> = {}):
 
 /**
  * PostgREST error → Response. PGRST202 means the function does not exist yet
- * (0006/0007 not applied); answering 500 there would read as a bug in the route.
+ * (a migration that creates it has not run); answering 500 there would read as a bug in
+ * the route.
+ *
+ * The message names the code, not a migration range: the server cannot know which
+ * migrations a given database is missing, and a hardcoded range ("0006/0007") sends the
+ * reader looking for files that may already be applied.
  */
 export function rpcErrorResponse(
   err: { message?: string; code?: string } | null,
@@ -76,7 +81,9 @@ export function rpcErrorResponse(
     return Response.json(
       {
         error: "not_migrated",
-        message: "Fungsi database belum ada — migrasi 0006/0007 belum diterapkan.",
+        message:
+          "Fungsi database yang dipanggil belum ada (PGRST202). Ini masalah database, " +
+          "bukan salah isian — cocokkan skema dengan migrasi terakhir di repo.",
       },
       { status: 503 },
     );

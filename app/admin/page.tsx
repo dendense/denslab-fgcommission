@@ -38,7 +38,7 @@ async function AdminView() {
     if (err instanceof MissingConfigError) return <ServerNotReady />;
     // A missing migration is a state, not a crash: name the code instead of hanging on
     // a loading state or throwing a 500 nobody can read.
-    if (err instanceof DbNotMigratedError) return <DbNotReady code={err.code} />;
+    if (err instanceof DbNotMigratedError) return <DbNotReady error={err} />;
     throw err;
   }
 }

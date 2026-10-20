@@ -27,7 +27,12 @@ export async function GET(request: Request) {
       return Response.json(
         {
           error: "not_migrated",
-          message: "Fungsi database belum ada — migrasi 0010 belum diterapkan.",
+          // The code, message, details and hint travel together: `details` is what names
+          // the column and the type, and it is the reason this screen was undiagnosable.
+          code: err.db.code,
+          message: err.db.message ?? "Database menolak permintaan ini.",
+          details: err.db.details,
+          hint: err.db.hint,
         },
         { status: 503 },
       );

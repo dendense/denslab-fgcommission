@@ -49,7 +49,7 @@ export async function sessionClient(): Promise<SupabaseClient> {
 export async function isAdmin(supabase: SupabaseClient): Promise<boolean> {
   const { data, error } = await supabase.rpc("is_admin");
   if (error) {
-    if (isSchemaError(error.code)) throw new DbNotMigratedError(error.code as string);
+    if (isSchemaError(error.code)) throw new DbNotMigratedError(error);
     throw error;
   }
   return data === true;

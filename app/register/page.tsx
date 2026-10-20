@@ -1,165 +1,89 @@
-"use client";
+import { redirect } from "next/navigation";
+import { connection } from "next/server";
+import { MissingConfigError } from "@/lib/supabase";
+import { isAdmin, sessionClient } from "@/lib/auth";
+import { DbNotMigratedError, throwIfSchemaError } from "@/lib/db-errors";
+import { ServerNotReady } from "@/app/_components/ServerNotReady";
+import { DbNotReady } from "@/app/_components/DbNotReady";
+import { RegisterForm } from "./RegisterForm";
 
-import Link from "next/link";
-import { useState } from "react";
-import { browserClient } from "@/lib/supabase-browser";
-import { waValid } from "@/lib/format";
+export const metadata = { title: "Daftar — Booking Sesi Foto" };
+
+// The answer depends on the session cookie, so this page cannot be a static shell.
+export const instant = false;
 
 /**
- * Open signup. Anyone can create an account; nobody gets a studio until an admin
- * approves it (supabase/migrations/0005_access_requests.sql).
+ * Public signup page, gated in front: someone who already holds a session has nothing to
+ * do here, and the form must not even be sent to them.
  *
- * After success this page does NOT navigate to /admin — the account has no access
- * yet. It says so and stops.
+ * Three answers for a signed-in visitor, matching the /login and /admin gates:
+ *
+ *   photographers row                → /admin
+ *   no row, but is_admin() is true   → /admin  (an admin needs no studio of his own)
+ *   no row, not an admin             → "menunggu persetujuan" (signup is in the queue)
+ *   no session                       → the form, exactly as before
+ *
+ * The gate is here rather than in the browser so the redirect is a real HTTP one and the
+ * form markup never leaves the server for a signed-in user.
+ *
+ * "Do I own a studio?" is `current_photographer_id()` (0004), NOT a select on
+ * `photographers`: since 0010 added `photographers_admin_select` (`using (is_admin())`),
+ * `.limit(1)` answers with *some other* photographer's row for an admin.
+ *
+ * A schema error is not "not approved" — it means the database is not ready, and it gets
+ * the card that prints the PostgREST code instead of a wrong verdict.
  */
-export default function RegisterPage() {
-  const [form, setForm] = useState({ email: "", password: "", name: "", wa: "" });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
-
-  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((prev) => ({ ...prev, [key]: e.target.value }));
-
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-
-    if (!form.email.trim()) return setError("Email wajib diisi.");
-    if (form.password.length < 8) return setError("Password minimal 8 karakter.");
-    if (!form.name.trim()) return setError("Nama wajib diisi.");
-    if (!waValid(form.wa)) return setError("Nomor WhatsApp tidak valid. Contoh: 081234567890.");
-
-    setBusy(true);
-    try {
-      const { error: signUpError } = await browserClient().auth.signUp({
-        email: form.email.trim(),
-        password: form.password,
-        options: {
-          data: {
-            display_name: form.name.trim(),
-            contact_wa: form.wa.replace(/[^\d]/g, ""),
-          },
-        },
-      });
-
-      if (signUpError) {
-        setError(
-          /already|registered|exists/i.test(signUpError.message)
-            ? "Email ini sudah terdaftar. Coba login."
-            : "Pendaftaran gagal. Coba lagi.",
-        );
-        return;
-      }
-
-      setDone(true);
-    } catch {
-      setError("Tidak bisa menghubungi server. Coba lagi.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (done) {
-    return (
-      <main className="shell">
-        <div className="card stack">
-          <div className="check" aria-hidden="true">✓</div>
-          <h1 className="center">Pendaftaran diterima.</h1>
-          <p className="lede center">
-            Tunggu persetujuan admin. Setelah disetujui, kamu bisa login dan mulai
-            mengelola jadwal studio.
-          </p>
-          <p className="center">
-            <Link className="btn btn--secondary" href="/login">Ke halaman login</Link>
-          </p>
-        </div>
-      </main>
-    );
-  }
-
+export default function Page() {
   return (
     <main className="shell">
-      <div className="stack">
-        <header className="stack">
-          <p className="eyebrow">Daftar</p>
-          <h1>Buat akun fotografer</h1>
-          <p className="lede">
-            Akun baru perlu disetujui admin sebelum bisa dipakai. Isi data di bawah,
-            kami kabari setelah aktif.
-          </p>
-        </header>
-
-        <form className="card stack" onSubmit={submit} noValidate>
-          <div className="field">
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={form.email}
-              onChange={set("email")}
-            />
-          </div>
-
-          <div className="field">
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={8}
-              value={form.password}
-              onChange={set("password")}
-            />
-            <p className="hint">Minimal 8 karakter.</p>
-          </div>
-
-          <div className="field">
-            <label htmlFor="name">Nama</label>
-            <input
-              id="name"
-              type="text"
-              autoComplete="name"
-              required
-              value={form.name}
-              onChange={set("name")}
-            />
-            <p className="hint">Nama yang tampil di halaman publik.</p>
-          </div>
-
-          <div className="field">
-            <label htmlFor="wa">Nomor WhatsApp</label>
-            <input
-              id="wa"
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              required
-              placeholder="081234567890"
-              value={form.wa}
-              onChange={set("wa")}
-            />
-            <p className="hint">Dipakai klien untuk menghubungi kamu.</p>
-          </div>
-
-          {error ? (
-            <p className="field-error" role="alert">
-              {error}
-            </p>
-          ) : null}
-
-          <button type="submit" className="btn btn--primary" disabled={busy} aria-busy={busy || undefined}>
-            {busy ? "Mengirim…" : "Daftar"}
-          </button>
-        </form>
-
-        <p className="center lede">
-          Sudah punya akun? <Link className="link" href="/login">Masuk</Link>
-        </p>
-      </div>
+      <View />
     </main>
+  );
+}
+
+async function View() {
+  await connection();
+
+  try {
+    return await Content();
+  } catch (err) {
+    if (err instanceof MissingConfigError) return <ServerNotReady />;
+    if (err instanceof DbNotMigratedError) return <DbNotReady error={err} />;
+    throw err;
+  }
+}
+
+async function Content() {
+  const supabase = await sessionClient();
+
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  // No session: the public path. This is the page's reason to exist.
+  if (authError || !auth.user) return <RegisterForm />;
+
+  const { data: studioId, error: studioError } = await supabase.rpc("current_photographer_id");
+
+  // A schema error is "database not ready", never "you are not approved" — it renders the
+  // card that prints the PostgREST code instead of a wrong verdict.
+  throwIfSchemaError(studioError);
+  if (studioError) throw studioError;
+
+  if (studioId) redirect("/admin");
+
+  if (await isAdmin(supabase)) redirect("/admin");
+
+  // Signed in, no studio, not an admin: the signup is in the approval queue.
+  return <Pending email={auth.user.email ?? ""} />;
+}
+
+function Pending({ email }: { email: string }) {
+  return (
+    <div className="card stack">
+      <p className="eyebrow">Menunggu persetujuan</p>
+      <h1>Akunmu belum disetujui admin.</h1>
+      <p className="lede">
+        Pendaftaran{email ? <> untuk <strong>{email}</strong></> : null} sudah masuk, jadi
+        tidak perlu mendaftar lagi. Admin akan meninjau dan mengaktifkan akses studio.
+      </p>
+    </div>
   );
 }
