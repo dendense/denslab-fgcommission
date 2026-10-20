@@ -7,7 +7,7 @@
 import { configErrorResponse } from "@/lib/supabase";
 import { requireUser } from "@/lib/auth";
 import { isUuid } from "@/lib/bookings";
-import { rpcFailure } from "@/lib/rpc-error";
+import { rpcErrorResponse } from "@/lib/admin-errors";
 
 type Body = {
   event_day_id?: unknown;
@@ -80,11 +80,7 @@ export async function POST(request: Request) {
       p_price_idr: price,
     });
 
-    if (error) {
-      const failure = rpcFailure(error);
-      if (failure.status === 500) console.error("create_slot failed", error);
-      return Response.json(failure, { status: failure.status });
-    }
+    if (error) return rpcErrorResponse(error);
 
     const slot = Array.isArray(data) ? data[0] : data;
     return Response.json(

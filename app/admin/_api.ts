@@ -3,7 +3,7 @@
 /**
  * Shared fetch helper for the admin write routes.
  *
- * The routes answer { error, message } on failure (see lib/rpc-error.ts). Everything
+ * The routes answer { error, message } on failure (see lib/admin-errors.ts). Everything
  * the UI shows for a rejected write comes from that message, so the same sentence is
  * never written twice and the server stays the single source of wording.
  */

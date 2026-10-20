@@ -10,7 +10,7 @@
 import { configErrorResponse } from "@/lib/supabase";
 import { requireUser } from "@/lib/auth";
 import { isUuid } from "@/lib/bookings";
-import { rpcFailure } from "@/lib/rpc-error";
+import { rpcErrorResponse } from "@/lib/admin-errors";
 
 const SLOT_OVERRIDES = { not_owner: "Slot ini bukan milik akunmu." };
 
@@ -68,11 +68,7 @@ export async function PATCH(
         p_status: status,
       });
 
-      if (error) {
-        const failure = rpcFailure(error, SLOT_OVERRIDES);
-        if (failure.status === 500) console.error("set_slot_status failed", error);
-        return Response.json(failure, { status: failure.status });
-      }
+      if (error) return rpcErrorResponse(error, SLOT_OVERRIDES);
 
       const slot = Array.isArray(data) ? data[0] : data;
       return Response.json({ slot }, { headers: { "Cache-Control": "no-store" } });
@@ -111,11 +107,7 @@ export async function PATCH(
       p_ends_at: endsAt,
     });
 
-    if (error) {
-      const failure = rpcFailure(error, SLOT_OVERRIDES);
-      if (failure.status === 500) console.error("update_slot failed", error);
-      return Response.json(failure, { status: failure.status });
-    }
+    if (error) return rpcErrorResponse(error, SLOT_OVERRIDES);
 
     const slot = Array.isArray(data) ? data[0] : data;
     return Response.json({ slot }, { headers: { "Cache-Control": "no-store" } });
@@ -150,11 +142,7 @@ export async function DELETE(
   try {
     const { error } = await guard.supabase.rpc("delete_slot", { p_slot_id: slotId });
 
-    if (error) {
-      const failure = rpcFailure(error, SLOT_OVERRIDES);
-      if (failure.status === 500) console.error("delete_slot failed", error);
-      return Response.json(failure, { status: failure.status });
-    }
+    if (error) return rpcErrorResponse(error, SLOT_OVERRIDES);
 
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
