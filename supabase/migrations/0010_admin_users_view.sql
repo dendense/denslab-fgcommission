@@ -147,7 +147,7 @@ begin
       p.slug                                              as slug,
       p.display_name                                      as display_name,
       p.contact_wa                                        as contact_wa,
-      u.email                                             as email,
+      u.email::text                                       as email,
       (p.user_id is not null)                             as has_account,
       coalesce(ev.events_total, 0)::int                   as events_total,
       coalesce(ev.events_published, 0)::int               as events_published,
@@ -178,7 +178,7 @@ begin
     left join lateral (
       select
         count(*)                                                     as slots_total,
-        sum(s.price_idr) filter (where s.status = 'booked')          as revenue_idr
+        (sum(s.price_idr) filter (where s.status = 'booked'))::bigint as revenue_idr
       from public.slots s
       join public.event_days d on d.id = s.event_day_id
       join public.events e     on e.id = d.event_id
