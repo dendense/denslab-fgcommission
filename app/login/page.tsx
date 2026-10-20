@@ -51,11 +51,12 @@ export default function LoginPage() {
         return;
       }
 
-      // RLS: this select can only see the caller's own photographer row.
-      const { data, error: rowError } = await supabase
-        .from("photographers")
-        .select("id")
-        .limit(1);
+      // "Do I own a studio?" is asked with `current_photographer_id()` (0004), NOT with a
+      // plain select on `photographers`. Since 0010 added `photographers_admin_select`
+      // (`using (is_admin())`), `.limit(1)` returns *some other* photographer's row for an
+      // admin, so the branch below only looked right by accident of ordering.
+      const { data: studioId, error: rowError } =
+        await supabase.rpc("current_photographer_id");
 
       if (rowError) {
         if (isSchemaError(rowError.code)) {
@@ -66,7 +67,7 @@ export default function LoginPage() {
         return;
       }
 
-      if (!data?.length) {
+      if (!studioId) {
         // No studio row. An admin still gets in — /admin is where he approves people.
         const { data: admin, error: adminError } = await supabase.rpc("is_admin");
 

@@ -60,13 +60,27 @@ async function Content() {
   const { data: auth, error: authError } = await supabase.auth.getUser();
   if (authError || !auth.user) redirect("/login");
 
-  // RLS (0004): this select can only return the caller's own photographer row, so
-  // a non-photographer gets no row rather than someone else's studio.
-  const { data: me, error: meError } = await supabase
-    .from("photographers")
-    .select("id, slug, display_name")
-    .limit(1)
-    .maybeSingle();
+  // "Do I own a studio?" must be asked with `current_photographer_id()` (0004), NOT with a
+  // plain select on `photographers`. Since 0010 added `photographers_admin_select`
+  // (`using (is_admin())`), `.limit(1).maybeSingle()` returns *some other* photographer's
+  // row for an admin — this page then greeted him with a stranger's studio name and listed
+  // every studio's events. The RPC is also the predicate create_event (0007) uses, so the
+  // gate here cannot disagree with the write path.
+  const { data: studioId, error: idError } = await supabase.rpc("current_photographer_id");
+
+  // Read the row by primary key: `id` came from the caller's own session, so it can only
+  // be the caller's studio.
+  let me: { id: string; slug: string; display_name: string | null } | null = null;
+  let meError = idError;
+  if (!idError && studioId) {
+    const read = await supabase
+      .from("photographers")
+      .select("id, slug, display_name")
+      .eq("id", studioId)
+      .maybeSingle();
+    me = read.data;
+    meError = read.error;
+  }
 
   if (meError) {
     console.error("admin: photographers read", meError);

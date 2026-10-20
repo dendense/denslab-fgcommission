@@ -19,8 +19,12 @@ export type Studio = { id: string; slug: string; display_name: string | null };
  * /admin is where he approves people; linking his account to a `photographers` row is
  * what unlocks creating events.
  *
- * RLS (0004) scopes the photographers select to the caller's own row, so this can only
- * ever return the caller's studio.
+ * "Do I own a studio?" is asked with `current_photographer_id()` (0004), NOT with a plain
+ * select on `photographers`. Since 0010 added `photographers_admin_select`
+ * (`using (is_admin())`), `.limit(1).maybeSingle()` returns *some other* photographer's row
+ * for an admin — the gate would hand him a stranger's studio. The RPC is also the exact
+ * predicate `create_event` / `create_event_day` (0007) use, so gate and write cannot
+ * disagree. The row is then read by primary key, so it can only be the caller's own.
  */
 export async function requireStudio(): Promise<{
   supabase: SupabaseClient;
@@ -32,13 +36,19 @@ export async function requireStudio(): Promise<{
   const { data: auth, error } = await supabase.auth.getUser();
   if (error || !auth.user) redirect("/login");
 
+  const { data: studioId, error: idError } = await supabase.rpc("current_photographer_id");
+
+  // Schema error → let the page render "belum siap" instead of a 500.
+  throwIfSchemaError(idError);
+  if (idError) throw idError;
+  if (!studioId) redirect("/admin");
+
   const { data: me, error: meError } = await supabase
     .from("photographers")
     .select("id, slug, display_name")
-    .limit(1)
+    .eq("id", studioId)
     .maybeSingle();
 
-  // Schema error → let the page render "belum siap" instead of a 500.
   throwIfSchemaError(meError);
   if (meError) throw meError;
   if (!me) redirect("/admin");
