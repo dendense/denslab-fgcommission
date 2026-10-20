@@ -12,6 +12,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SlotStatus } from "./types";
+import { throwIfSchemaError } from "./db-errors";
 
 export type AdminSlot = {
   id: string;
@@ -49,6 +50,7 @@ export async function listEvents(supabase: SupabaseClient): Promise<AdminEvent[]
     .select(SHAPE)
     .order("created_at", { ascending: false });
 
+  throwIfSchemaError(error);
   if (error) throw error;
   return (data ?? []) as unknown as AdminEvent[];
 }
@@ -64,6 +66,7 @@ export async function getEvent(
     .eq("id", id)
     .maybeSingle();
 
+  throwIfSchemaError(error);
   if (error) throw error;
   return (data as unknown as AdminEvent | null) ?? null;
 }
@@ -100,6 +103,7 @@ export async function listPublished(supabase: SupabaseClient): Promise<Published
     .eq("status", "published")
     .order("created_at", { ascending: false });
 
+  throwIfSchemaError(error);
   if (error) throw error;
   return (data ?? []) as unknown as PublishedRef[];
 }

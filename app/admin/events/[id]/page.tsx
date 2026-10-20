@@ -2,9 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { MissingConfigError } from "@/lib/supabase";
+import { DbNotMigratedError } from "@/lib/db-errors";
 import { requireStudio } from "@/lib/admin-session";
 import { getEvent, listPublished } from "@/lib/admin-events";
 import { ServerNotReady } from "@/app/_components/ServerNotReady";
+import { DbNotReady } from "@/app/_components/DbNotReady";
 import { EventEditor } from "./EventEditor";
 
 export const metadata = { title: "Kelola event" };
@@ -28,6 +30,7 @@ async function View({ params }: Props) {
     return await Content(params);
   } catch (err) {
     if (err instanceof MissingConfigError) return <ServerNotReady />;
+    if (err instanceof DbNotMigratedError) return <DbNotReady code={err.code} />;
     throw err;
   }
 }

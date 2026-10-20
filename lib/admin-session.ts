@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { User } from "@supabase/supabase-js";
 import { sessionClient } from "./auth";
+import { throwIfSchemaError } from "./db-errors";
 
 export type Studio = { id: string; slug: string; display_name: string | null };
 
@@ -10,7 +11,13 @@ export type Studio = { id: string; slug: string; display_name: string | null };
  * drift on what "logged in" means.
  *
  * - no session          → /login
- * - no photographers row → /admin (it renders the "menunggu persetujuan" card)
+ * - no photographers row → /admin (it renders the "menunggu persetujuan" card, or the
+ *                          admin panel for an admin who has no studio of his own)
+ *
+ * An admin without a studio row cannot own an event, so he is not let in here either —
+ * every write path in 0007 resolves the owner through `current_photographer_id()`.
+ * /admin is where he approves people; linking his account to a `photographers` row is
+ * what unlocks creating events.
  *
  * RLS (0004) scopes the photographers select to the caller's own row, so this can only
  * ever return the caller's studio.
@@ -31,6 +38,8 @@ export async function requireStudio(): Promise<{
     .limit(1)
     .maybeSingle();
 
+  // Schema error → let the page render "belum siap" instead of a 500.
+  throwIfSchemaError(meError);
   if (meError) throw meError;
   if (!me) redirect("/admin");
 

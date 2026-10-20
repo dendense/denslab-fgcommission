@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { MissingConfigError } from "@/lib/supabase";
+import { DbNotMigratedError } from "@/lib/db-errors";
 import { requireStudio } from "@/lib/admin-session";
 import { ServerNotReady } from "@/app/_components/ServerNotReady";
+import { DbNotReady } from "@/app/_components/DbNotReady";
 import { NewEventForm } from "./NewEventForm";
 
 export const metadata = { title: "Buat event" };
@@ -24,6 +26,7 @@ async function View() {
     return await Content();
   } catch (err) {
     if (err instanceof MissingConfigError) return <ServerNotReady />;
+    if (err instanceof DbNotMigratedError) return <DbNotReady code={err.code} />;
     throw err;
   }
 }

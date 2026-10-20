@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { browserClient } from "@/lib/supabase-browser";
+import { NOT_MIGRATED_TITLE, isSchemaError, notMigratedDetail } from "@/lib/db-errors";
 
 /**
  * Login form. Text is Indonesian, matching the rest of the app.
@@ -12,9 +13,21 @@ import { browserClient } from "@/lib/supabase-browser";
  * session cookie only exists after the browser client has written it — redirecting
  * from a server component in the same round trip would race that write.
  *
+ * Three outcomes, not two:
+ *   photographers row                  → /admin
+ *   no row, but is_admin() is true     → /admin   (an admin needs no studio of his own)
+ *   no row, not an admin               → "Akunmu belum disetujui admin."
+ *
+ * The admin branch calls RPC `is_admin()` (0005, grant `authenticated`) on the session
+ * client — never a service-role client, which would carry no `auth.uid()`.
+ *
  * "Belum disetujui" is a real state, not an error: signup is open, access is not.
  * A user who is not a photographer yet stays on this page with a logout button so
  * they are not stuck in a redirect loop between /login and /admin.
+ *
+ * A *schema* error is neither: it means the migrations are not applied, and saying
+ * "not approved" there is what locked the admin out of his own panel. It gets its own
+ * screen with the PostgREST code on it.
  */
 export default function LoginPage() {
   const router = useRouter();
@@ -23,6 +36,7 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [notReady, setNotReady] = useState<string | null>(null);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -44,12 +58,31 @@ export default function LoginPage() {
         .limit(1);
 
       if (rowError) {
+        if (isSchemaError(rowError.code)) {
+          setNotReady(rowError.code as string);
+          return;
+        }
         setError("Gagal memeriksa status akun. Coba lagi.");
         return;
       }
+
       if (!data?.length) {
-        setPending(true);
-        return;
+        // No studio row. An admin still gets in — /admin is where he approves people.
+        const { data: admin, error: adminError } = await supabase.rpc("is_admin");
+
+        if (adminError) {
+          if (isSchemaError(adminError.code)) {
+            setNotReady(adminError.code as string);
+            return;
+          }
+          setError("Gagal memeriksa status akun. Coba lagi.");
+          return;
+        }
+
+        if (admin !== true) {
+          setPending(true);
+          return;
+        }
       }
 
       // Client-side navigation is safe here: the browser client has already written
@@ -71,8 +104,25 @@ export default function LoginPage() {
     // client that holds it is what actually ends it.
     await browserClient().auth.signOut();
     setPending(false);
+    setNotReady(null);
     setPassword("");
     router.refresh();
+  }
+
+  if (notReady) {
+    return (
+      <main className="shell">
+        <div className="card stack">
+          <p className="eyebrow">Belum siap</p>
+          <h1>{NOT_MIGRATED_TITLE}</h1>
+          <p className="lede">{notMigratedDetail(notReady)}</p>
+          <p className="mono">kode error: {notReady}</p>
+          <button type="button" className="btn btn--secondary" onClick={logout}>
+            Keluar
+          </button>
+        </div>
+      </main>
+    );
   }
 
   if (pending) {

@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { configErrorResponse, publicEnv } from "./supabase";
+import { DbNotMigratedError, isSchemaError } from "./db-errors";
 
 /**
  * Supabase client bound to the request's session cookie — the replacement for the
@@ -35,11 +36,23 @@ export async function sessionClient(): Promise<SupabaseClient> {
   });
 }
 
-/** `true` only for a signed-in user with a row in `admin_users` (RLS: own row). */
+/**
+ * `true` only for a signed-in user with a row in `admin_users`.
+ *
+ * RPC `is_admin()` (0005, security definer, grant `authenticated`) rather than a select
+ * on `admin_users`: it is the same predicate the RLS policies use, so the gate and the
+ * policies cannot disagree, and it answers `false` for anon instead of erroring.
+ *
+ * Throws DbNotMigratedError when the function itself is missing — 0005 not applied is
+ * "database not ready", never "this account is not an admin".
+ */
 export async function isAdmin(supabase: SupabaseClient): Promise<boolean> {
-  const { data, error } = await supabase.from("admin_users").select("user_id").limit(1);
-  if (error) throw error;
-  return (data?.length ?? 0) > 0;
+  const { data, error } = await supabase.rpc("is_admin");
+  if (error) {
+    if (isSchemaError(error.code)) throw new DbNotMigratedError(error.code as string);
+    throw error;
+  }
+  return data === true;
 }
 
 export type Guard =
@@ -87,6 +100,9 @@ export async function requireAdmin(): Promise<Guard> {
     }
   } catch (err) {
     console.error("requireAdmin", err);
+    if (err instanceof DbNotMigratedError) {
+      return deny(503, "not_migrated", "Aplikasi belum siap — migrasi database belum lengkap.");
+    }
     return deny(500, "server_error", "Terjadi kesalahan di server.");
   }
 
