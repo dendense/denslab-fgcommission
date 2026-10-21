@@ -24,6 +24,17 @@ export default function LoginPage() {
     <main className="shell">
       <div className="stack">
         <header className="stack">
+          {/* Plain <img>, not next/image: Next refuses SVG through the optimizer unless
+              next.config.ts sets dangerouslyAllowSVG, and a vector needs no re-encoding.
+              511×190 are the intrinsic dimensions from the file's own viewBox — the style
+              only caps the display width, so the browser keeps the 2.6895 ratio. */}
+          <img
+            src="/app-logo.svg"
+            alt="denslab commission"
+            width={511}
+            height={190}
+            style={{ display: "block", width: "100%", maxWidth: 180, height: "auto" }}
+          />
           <p className="eyebrow">Masuk</p>
           <h1>Masuk dengan akun Google</h1>
           <p className="lede">Kelola jadwal dan slot sesi foto kamu.</p>
