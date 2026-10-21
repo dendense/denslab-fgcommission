@@ -21,8 +21,30 @@ type OAuthError = { code: string; message: string };
  *
  * `aria-live` on the error box: the button stays in place and the failure appears under
  * it, so a screen-reader user who is not focused on that spot still hears it.
+ *
+ * Copy: `labels` is optional and defaults to the Indonesian strings below, so /register —
+ * which passes nothing — renders exactly as before. /login passes its dictionary instead
+ * (docs/COPY-EN.md §5b). Keep the default in sync with `dict.id` in app/login/lang.ts; a
+ * default here rather than a required prop is what keeps this component usable from a
+ * page that has no language toggle.
  */
-export function GoogleButton() {
+export type GoogleButtonLabels = {
+  idle: string;
+  busy: string;
+  failed: string;
+  failedHint: string;
+  fallbackMessage: string;
+};
+
+const DEFAULT_LABELS: GoogleButtonLabels = {
+  idle: "Masuk dengan Google",
+  busy: "Mengalihkan ke Google…",
+  failed: "Google gagal.",
+  failedHint: "Coba lagi, atau hubungi admin kalau terus gagal.",
+  fallbackMessage: "Server auth tidak mengirim pesan.",
+};
+
+export function GoogleButton({ labels = DEFAULT_LABELS }: { labels?: GoogleButtonLabels }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<OAuthError | null>(null);
 
@@ -40,7 +62,7 @@ export function GoogleButton() {
       if (oauthError) {
         setError({
           code: oauthError.code ?? oauthError.name ?? "oauth_error",
-          message: oauthError.message || "Server auth tidak mengirim pesan.",
+          message: oauthError.message || labels.fallbackMessage,
         });
         setBusy(false);
       }
@@ -62,15 +84,18 @@ export function GoogleButton() {
         disabled={busy}
         aria-busy={busy || undefined}
       >
-        {busy ? "Mengalihkan ke Google…" : "Masuk dengan Google"}
+        {busy ? labels.busy : labels.idle}
       </button>
 
       <div aria-live="polite">
         {error ? (
           <div className="notice notice--warn">
             <p>
-              <strong>Google gagal.</strong> Coba lagi, atau hubungi admin kalau terus
-              gagal.
+              <strong>{labels.failed}</strong>
+              {/* One string, not two children: two adjacent JSX text nodes would make the
+                  SSR output differ by a `<!-- -->` separator, and /register must stay
+                  byte-identical. */}
+              {" " + labels.failedHint}
             </p>
             <p className="mono">code: {error.code}</p>
             <p className="mono">message: {error.message}</p>

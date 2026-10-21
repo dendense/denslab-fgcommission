@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { GoogleButton } from "@/app/_components/GoogleButton";
 import { OAuthErrorNotice } from "./OAuthErrorNotice";
+import { LangToggle } from "./LangToggle";
+import { LANG_COOKIE, dict, langFrom, locale, slotTimes } from "./lang";
 
 /**
  * Login page — Google only, now framed as the landing page (docs/LANDING-LOGIN.md).
@@ -22,8 +25,39 @@ import { OAuthErrorNotice } from "./OAuthErrorNotice";
  * not links. Their layout order below is also the screen-reader order — the two-column
  * desktop arrangement at 960px is done with grid-template-areas in globals.css, never by
  * moving a node.
+ *
+ * Language: the `lang` cookie is read here, on the server, so the HTML that arrives is
+ * already in the right language — no flash of Indonesian on an English refresh. The
+ * dictionary is in ./lang.ts and only this route imports it.
  */
-export default function LoginPage() {
+
+// The rendered language depends on a request cookie, so there is no static shell to
+// prerender — same reason /register, /onboarding and /admin set this. Blocking the route
+// is the point: a Suspense placeholder would mean streaming a guess (Indonesian) and then
+// swapping it, which is exactly the flash the cookie exists to avoid.
+export const instant = false;
+
+/**
+ * The demo day. Fixed on purpose: the slots below are an illustration, not availability,
+ * so a live date would invite the reader to think 7 November is bookable. Formatted with
+ * Intl rather than written out, because the month name differs per language and hardcoding
+ * "November" twice would be the one string nobody updates when a language is added.
+ */
+const DEMO_DAY = new Date("2026-11-07T10:00:00+07:00");
+
+export default async function LoginPage() {
+  const lang = langFrom((await cookies()).get(LANG_COOKIE)?.value);
+  const t = dict[lang];
+  const times = slotTimes[lang];
+
+  const day = new Intl.DateTimeFormat(locale[lang], {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).format(DEMO_DAY);
+
   return (
     <main className="shell shell--wide landing">
       <header className="landing__top">
@@ -38,73 +72,79 @@ export default function LoginPage() {
           width={511}
           height={190}
         />
+        <LangToggle lang={lang} />
       </header>
 
       <div className="page">
         <section className="hero" aria-labelledby="hero-title">
-          <p className="eyebrow">Fotografi event matsuri</p>
-          <h1 id="hero-title">Booking fotografer matsuri, tanpa ribet.</h1>
-          <p className="lede">
-            Klien memilih jam lewat satu tautan. Fotografer mengelola event, hari, dan slot
-            dari satu panel.
-          </p>
+          {/* Brand line, identical in both languages. */}
+          <p className="eyebrow">Photographer Commission Maker</p>
+          <h1 id="hero-title">{t.heroTitle}</h1>
+          <p className="lede">{t.heroLede}</p>
         </section>
 
         <section className="card login" aria-labelledby="login-title">
-          <p className="eyebrow">Masuk</p>
-          <h2 id="login-title">Masuk dengan akun Google</h2>
-          <p className="lede">Untuk fotografer dan admin. Klien tidak perlu akun.</p>
+          <p className="eyebrow">{t.loginEyebrow}</p>
+          <h2 id="login-title">{t.loginTitle}</h2>
+          <p className="lede">{t.loginLede}</p>
 
           <Suspense fallback={null}>
-            <OAuthErrorNotice />
+            <OAuthErrorNotice
+              labels={{ failed: t.googleFailed, failedHint: t.googleFailedHint }}
+            />
           </Suspense>
-          <GoogleButton />
+          <GoogleButton
+            labels={{
+              idle: t.googleIdle,
+              busy: t.googleBusy,
+              failed: t.googleFailed,
+              failedHint: t.googleFailedHint,
+              fallbackMessage: t.oauthFallbackMessage,
+            }}
+          />
 
           <p className="lede">
-            Belum punya akun?{" "}
+            {t.noAccount}{" "}
             <Link className="link" href="/register">
-              Daftar di sini
+              {t.registerLink}
             </Link>
           </p>
         </section>
 
         <section className="preview" aria-labelledby="preview-title">
-          <h2 id="preview-title">Yang dilihat klien</h2>
+          <h2 id="preview-title">{t.previewTitle}</h2>
+          {/* The day the sample slots belong to. Same .day-heading treatment as the public
+              event page, so "this is a date heading" reads the same on both. */}
+          <p className="day-heading">{day}</p>
           <div className="slots slots--grid">
             <div className="slot slot--open slot--demo">
-              <span className="slot__time">10.00–10.30 WIB</span>
+              <span className="slot__time">{times[0]}</span>
               <span className="slot__price">Rp150.000</span>
-              <span className="slot__status">Tersedia</span>
+              <span className="slot__status">{t.slotAvailable}</span>
             </div>
             <div className="slot slot--taken" aria-disabled="true">
-              <span className="slot__time">11.00–11.30 WIB</span>
+              <span className="slot__time">{times[1]}</span>
               <span className="slot__price">Rp150.000</span>
-              <span className="slot__badge">Terisi</span>
+              <span className="slot__badge">{t.slotTaken}</span>
             </div>
           </div>
-          <p className="hint">
-            Contoh tampilan slot. Tanpa akun, tanpa pembayaran di muka.
-          </p>
+          <p className="hint">{t.previewHint}</p>
         </section>
 
         <section className="steps" aria-labelledby="steps-title">
-          <h2 id="steps-title">Cara kerjanya</h2>
+          <h2 id="steps-title">{t.stepsTitle}</h2>
           <ol className="steps__list">
             <li className="steps__item">
-              <h3>Buat event dan slot</h3>
-              <p className="hint">Fotografer menentukan hari, jam, dan harga tiap slot.</p>
+              <h3>{t.step1Title}</h3>
+              <p className="hint">{t.step1Body}</p>
             </li>
             <li className="steps__item">
-              <h3>Bagikan tautan atau QR</h3>
-              <p className="hint">
-                Event terbit dengan tautan publik dan kode QR siap dipasang.
-              </p>
+              <h3>{t.step2Title}</h3>
+              <p className="hint">{t.step2Body}</p>
             </li>
             <li className="steps__item">
-              <h3>Klien memilih slot</h3>
-              <p className="hint">
-                Konfirmasi langsung tampil, lengkap dengan tombol tambah ke kalender.
-              </p>
+              <h3>{t.step3Title}</h3>
+              <p className="hint">{t.step3Body}</p>
             </li>
           </ol>
         </section>
@@ -112,10 +152,8 @@ export default function LoginPage() {
 
       <footer className="landing__foot">
         {/* 6.4: byte-exact, one line — the only statement that this app charges nothing. */}
-        <p className="hint">
-          Pembayaran dilakukan langsung ke fotografer di lokasi. Tidak ada pembayaran di halaman ini.
-        </p>
-        <p className="hint">© denslab</p>
+        <p className="hint">{t.footerPayment}</p>
+        <p className="hint">© denslab - Cinemichi Production</p>
       </footer>
     </main>
   );

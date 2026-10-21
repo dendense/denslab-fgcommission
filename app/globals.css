@@ -398,6 +398,220 @@ fieldset legend,
   color: var(--accent);
 }
 
+/* Instagram username: the "@" is a static prefix, not part of the value. The control is one
+   box (boundary on the wrapper, not the input) so it reads as a single field; the input keeps
+   its own 48px height and 16px font for the same reasons as .field input. `:has` carries the
+   invalid boundary from the input to the wrapper — no extra attribute to keep in sync. */
+.field__control {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+
+.field__control:has(input[aria-invalid="true"]) {
+  border-color: var(--accent);
+}
+
+.field__prefix {
+  display: grid;
+  place-items: center;
+  padding: 0 var(--space-2) 0 var(--space-3);
+  color: var(--muted);
+  font-weight: 600;
+  border-right: 1px solid var(--line);
+  user-select: none;
+}
+
+.field__control input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* The ring belongs on the whole control: an outline on the inner input would be drawn
+   inside the wrapper's border and read as two boxes. */
+.field__control:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.field__control input:focus-visible {
+  outline: none;
+}
+
+/* ---------------------------------------------------------------- table (/users) */
+
+/* A real <table>: this screen is five comparable columns per row, and a table gives the
+   header/row relationship to a screen reader for free. At narrow widths the wrapper scrolls
+   sideways instead of the page (html has overflow-x:hidden, which would clip the last column
+   rather than scroll it) — hence tabindex on the region in UsersList.tsx. */
+.table-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-ui);
+  text-align: left;
+}
+
+.table th,
+.table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.table thead th {
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.table tbody th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Data cells stay on one line. Without this the WA column collapsed to one digit per line
+   at 390px (the two nowrap buttons plus the studio name squeezed it), which is legible but
+   unreadable. The wrapper scrolls instead — that is what it is for. */
+.table tbody td {
+  white-space: nowrap;
+}
+
+.table tbody tr:last-child th,
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Archived rows stay in the list (that is where "Pulihkan" lives) and are marked twice:
+   the Status badge says "Diarsipkan" and the row is dimmed. Colour alone is never the only
+   cue. */
+.table tr[data-archived] {
+  background: var(--surface-sunken);
+  color: var(--muted);
+}
+
+.table tr[data-archived] th {
+  font-weight: 500;
+}
+
+.table .btn {
+  width: auto;
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--fs-ui);
+  white-space: nowrap;
+}
+
+.table .btn-row--inline {
+  gap: var(--space-2);
+}
+
+.table .slot-row__error {
+  margin-top: var(--space-2);
+  max-width: 32ch;
+}
+
+/* A five-column table needs ~975px; below that the shell (max 1040 minus gutters) cannot hold
+   it, and every compromise — sideways scroll, a pinned actions column — hides either the
+   data or the buttons on a phone and overlaps them on a tablet. So the table is only a table
+   from 1040px up; below it each row becomes a card. Same DOM, same <table> semantics for
+   assistive tech — only the display changes, and every cell carries its own label. */
+@media (max-width: 1039px) {
+  .table-wrap {
+    overflow-x: visible;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .table,
+  .table tbody,
+  .table tr,
+  .table th,
+  .table td {
+    display: block;
+  }
+
+  .table thead {
+    display: none;
+  }
+
+  .table tr {
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: var(--space-3);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+  }
+
+  .table tr[data-archived] {
+    background: var(--surface-sunken);
+  }
+
+  .table th,
+  .table td {
+    padding: 0;
+    border: 0;
+  }
+
+  .table tbody th {
+    font-size: var(--fs-title);
+    white-space: normal;
+    margin-bottom: var(--space-2);
+  }
+
+  /* The label is a real grid cell, so a long value wraps under it instead of beside it. */
+  .table tbody td {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: var(--space-2);
+    align-items: baseline;
+    white-space: normal;
+    padding: var(--space-1) 0;
+  }
+
+  .table tbody td::before {
+    content: attr(data-label);
+    font-size: var(--fs-caption);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* A grid item stretches by default; the badge is a label, not a bar. */
+  .table tbody td > .badge {
+    justify-self: start;
+  }
+
+  .table tbody td:last-child {
+    grid-template-columns: minmax(0, 1fr);
+    margin-top: var(--space-3);
+  }
+
+  .table tbody td:last-child::before {
+    display: none;
+  }
+
+  .table .btn-row--inline {
+    grid-auto-columns: 1fr;
+  }
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -1174,4 +1388,65 @@ fieldset legend,
    (>=960px), and when the box shrinks below 180px at 200% zoom. */
 .landing__logo {
   transform: translateX(-8.4149%);
+}
+
+/* ------------------------------------------------- language toggle (LOGIN-3) */
+
+/* Two buttons in one pill, top-right of .landing__top. The group carries the control
+   boundary (--line-strong, 3.37:1 on --bg) so the pair reads as one control; the pressed
+   one fills with --accent (--accent-ink on --accent = 5.95:1). Colour is not the only cue:
+   the pressed button also changes text colour and background, and aria-pressed carries it
+   for assistive tech.
+   flex: 0 0 auto keeps the toggle at its natural size so the logo, which is the flexible
+   item, absorbs any shortage — the logo's own translateX(-8.4149%) keeps its ink on the
+   gutter at every width, so nothing here can move it. */
+.lang {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-1);
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+}
+
+.lang__btn {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--space-2);
+  font: inherit;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+
+.lang__btn:hover {
+  color: var(--ink);
+  background: var(--surface-sunken);
+}
+
+.lang__btn[aria-pressed="true"] {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+/* At 320px the logo box (180) + toggle (100) + gap (16) exceed the 288px of gutter
+   space, and the header's flex-wrap would drop the toggle onto a second line — it must
+   stay in the top-right corner at every width. nowrap + min-width:0 lets the logo, which
+   is the flexible item, absorb the 12px shortfall; the translateX percentage keeps its ink
+   on the gutter whatever the width. From 360px up neither rule does anything. */
+.landing__top {
+  flex-wrap: nowrap;
+}
+
+.landing__top .landing__logo {
+  min-width: 0;
 }

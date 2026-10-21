@@ -15,8 +15,21 @@ import { useSearchParams } from "next/navigation";
  *
  * Must be rendered inside a <Suspense> boundary — `useSearchParams` opts the page out of
  * static prerendering.
+ *
+ * `labels` comes from the page's dictionary: this notice is the same error block GoogleButton
+ * prints, so both read the same two strings (docs/COPY-EN.md §5b "Aturan konsistensi").
+ * Defaults are the Indonesian pair so the component still works if rendered bare.
  */
-export function OAuthErrorNotice() {
+const DEFAULT_LABELS = {
+  failed: "Google gagal.",
+  failedHint: "Coba lagi, atau hubungi admin kalau terus gagal.",
+};
+
+export function OAuthErrorNotice({
+  labels = DEFAULT_LABELS,
+}: {
+  labels?: { failed: string; failedHint: string };
+}) {
   const params = useSearchParams();
   const code = params.get("error_code") ?? params.get("error");
   if (!code) return null;
@@ -26,7 +39,8 @@ export function OAuthErrorNotice() {
   return (
     <div className="notice notice--warn" role="alert">
       <p>
-        <strong>Google gagal.</strong> Coba lagi, atau hubungi admin kalau terus gagal.
+        <strong>{labels.failed}</strong>
+        {" " + labels.failedHint}
       </p>
       <p className="mono">code: {code}</p>
       {description ? <p className="mono">message: {description}</p> : null}
