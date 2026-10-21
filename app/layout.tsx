@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Booking Sesi Foto",
+  title: "denslab - commission",
   description: "Booking sesi foto tanpa akun — pilih slot, isi nama dan nomor WhatsApp.",
 };
 
