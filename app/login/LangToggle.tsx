@@ -26,13 +26,19 @@ export function LangToggle({ lang }: { lang: Lang }) {
   const router = useRouter();
 
   function pick(next: Lang) {
-    if (next === lang) return;
+    // Before LOGIN-4 this cookie was written with path=/, and every browser that visited
+    // then still holds that copy. With two `lang` cookies the browser sends the broader
+    // path last and Next's cookies().get() returns the last value, so each click wrote
+    // path=/login while the server kept reading the stale `en` — the toggle looked dead.
+    // The expiry runs before the write, and also when the language is unchanged, so the
+    // first tap repairs a returning visitor instead of leaving the old cookie to resurface.
+    document.cookie = `${LANG_COOKIE}=; path=/; max-age=0; samesite=lax`;
     // path=/login, not /: only this route is localised. With path=/, a visitor who picked
     // EN here would carry `lang=en` into /register and /admin, whose content is Indonesian
     // only — app/layout.tsx would then declare <html lang="en"> on a page that is not
     // English, which is worse for a screen reader than no preference at all.
     document.cookie = `${LANG_COOKIE}=${next}; path=/login; max-age=31536000; samesite=lax`;
-    router.refresh();
+    if (next !== lang) router.refresh();
   }
 
   return (
