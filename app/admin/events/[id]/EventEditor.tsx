@@ -70,9 +70,9 @@ export function EventEditor({
   }
 
   return (
-    <div className="stack">
+    <div className="stack editor">
       {/* ------------------------------------------------------------ status */}
-      <section className="card stack">
+      <section className="card stack editor__status">
         <div className="day-block__head">
           <h2>Status</h2>
           <span className={`badge badge--${published ? "published" : "draft"}`}>
@@ -147,7 +147,7 @@ export function EventEditor({
       </section>
 
       {/* ------------------------------------------------------------ days */}
-      <section className="stack">
+      <section className="stack editor__days">
         <h2>Hari</h2>
         <p className="lede">
           Tanggal dan jam sesi. Slot dibuat per hari; hari yang punya slot terisi tidak bisa
@@ -170,7 +170,7 @@ export function EventEditor({
       {published ? (
         <>
           {shadowed ? (
-            <div className="notice notice--warn stack" role="status">
+            <div className="notice notice--warn stack editor__warn" role="status">
               <p>
                 <strong>Ada {publishedEvents.length} event terbit.</strong> Halaman publik
                 hanya menampilkan <strong>satu</strong> event per fotografer — yang paling
@@ -195,7 +195,7 @@ export function EventEditor({
           <QrCard slug={studioSlug} />
         </>
       ) : (
-        <p className="notice notice--warn">Event belum terbit — halaman publik belum aktif.</p>
+        <p className="notice notice--warn editor__qr">Event belum terbit — halaman publik belum aktif.</p>
       )}
     </div>
   );

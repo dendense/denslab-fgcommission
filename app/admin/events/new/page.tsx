@@ -17,7 +17,7 @@ type Props = { searchParams: Promise<{ for?: string }> };
 
 export default function Page({ searchParams }: Props) {
   return (
-    <main className="shell">
+    <main className="shell shell--reading">
       <View searchParams={searchParams} />
     </main>
   );

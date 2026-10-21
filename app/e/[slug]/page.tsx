@@ -21,7 +21,7 @@ type Props = {
 // notFound() inside a boundary would ship a "404 page" with a 200 status.
 export default function Page({ params, searchParams }: Props) {
   return (
-    <main className="shell">
+    <main className="shell shell--reading">
       <EventView params={params} searchParams={searchParams} />
     </main>
   );
@@ -70,7 +70,7 @@ async function EventView({ params, searchParams }: Props) {
       {data.days.map((day) => (
         <section key={day.id}>
           <h2 className="day-heading">{dateWIB(`${day.day_date}T00:00:00+07:00`)}</h2>
-          <div className="slots">
+          <div className="slots slots--grid">
             {day.slots.map((slot) => (
               <SlotCard key={slot.id} slot={slot} slug={slug} />
             ))}
@@ -78,7 +78,7 @@ async function EventView({ params, searchParams }: Props) {
         </section>
       ))}
 
-      <p className="lede" style={{ fontSize: 14 }}>
+      <p className="hint">
         Semua jam dalam WIB (Asia/Jakarta). Tidak perlu membuat akun.
       </p>
     </div>

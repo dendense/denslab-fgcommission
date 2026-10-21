@@ -17,7 +17,7 @@ export const instant = false;
 // into soft ones — a photographer would see the admin shell flash before being sent away.
 export default function Page() {
   return (
-    <main className="shell">
+    <main className="shell shell--wide">
       <View />
     </main>
   );

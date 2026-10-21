@@ -18,7 +18,7 @@ type Props = { params: Promise<{ slug: string; slotId: string }> };
 // notFound() for an unknown slot into a soft 404.
 export default function Page({ params }: Props) {
   return (
-    <main className="shell">
+    <main className="shell shell--reading">
       <BookView params={params} />
     </main>
   );

@@ -17,7 +17,7 @@ type Props = { params: Promise<{ id: string }> };
 
 export default function Page({ params }: Props) {
   return (
-    <main className="shell">
+    <main className="shell shell--wide">
       <View params={params} />
     </main>
   );

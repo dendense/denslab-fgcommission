@@ -1,20 +1,74 @@
-/* Design tokens — one accent (vermilion) + warm neutrals. No gradients. */
+/* Design tokens — one accent (vermilion) + warm neutrals. No gradients.
+   Breakpoints are literal (custom properties cannot be used in media queries):
+   520px, 768px, 1024px, 1200px — mobile-first, min-width only. */
+
 :root {
-  --bg: #f7f5f2;
+  /* surfaces & lines */
+  --bg: #f4f0ea;               /* was #f7f5f2: darker so a white card lifts */
   --surface: #ffffff;
-  --ink: #1a1a1a;
+  --surface-sunken: #ece6dd;   /* booked slot, secondary hover, disabled (was #f2efeb) */
+  --line: #ddd5ca;             /* was #e5e0d8 */
+  --line-strong: #8a8178;      /* control boundary — unchanged */
+
+  /* text */
+  --ink: #1c1a17;              /* was #1a1a1a */
   --muted: #5c5650;
-  --line: #e5e0d8;
+
+  /* accent & status */
   --accent: #b33a12;
-  --accent-ink: #ffffff;
+  --accent-strong: #96300e;
   --accent-soft: #fbeee8;
+  --accent-ink: #ffffff;
+  --danger-ink: #8f2c0b;
+  --danger-line: #a8553a;      /* was #c98d78 (2.78:1) — 5.22:1 on white, 4.59:1 on --accent-soft */
+  --warn-ink: #8a4b06;
+  --warn-soft: #fdf1e3;
+  --warn-line: #efd7b8;
   --ok: #1f6b3a;
   --ok-soft: #e8f3ec;
-  --warn-soft: #fdf1e3;
-  --warn-ink: #8a4b06;
-  --radius: 10px;
-  --radius-sm: 6px;
-  --max: 480px;
+  --ok-line: #cfe4d6;
+  --chip: #e4ddd2;             /* draft badge (was #e7e2db) */
+  --chip-ink: #4a443e;
+  --disabled-bg: #d9d3cb;
+  --disabled-ink: #4a443e;
+  --disabled-line: #b9aca4;
+
+  /* type: 5 steps, replacing 8 sizes */
+  --fs-caption: 13px;   /* eyebrow, hint, badge, status, notes */
+  --fs-ui: 15px;        /* labels, meta, notices, tabs, compact buttons */
+  --fs-body: 16px;      /* body, inputs, full buttons (16px blocks iOS zoom) */
+  --fs-title: 19px;     /* h2, row titles, slot time */
+  --fs-display: clamp(1.625rem, 1.2rem + 1.6vw, 2.125rem); /* h1: 26px phone, 34px desktop */
+
+  /* space: 4px scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* shape */
+  --radius-sm: 8px;     /* controls, rows, notices (was 6px) */
+  --radius: 12px;       /* cards (was 10px) */
+  --radius-pill: 999px;
+
+  /* depth: two levels only, warm-neutral shadow, no glow */
+  --shadow-1: 0 1px 2px rgb(60 40 20 / 0.06);
+  --shadow-2: 0 2px 4px rgb(60 40 20 / 0.05), 0 8px 24px rgb(60 40 20 / 0.08);
+
+  /* motion */
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+
+  /* page width: three tiers, replacing the single --max */
+  --max-narrow: 480px;   /* login, register, onboarding, booking, 404 */
+  --max-reading: 720px;  /* /e/[slug] and the booking form */
+  --max-wide: 1040px;    /* /admin, /admin/events/*, /users */
+  --gutter: clamp(16px, 4vw, 32px);
 }
 
 * {
@@ -36,11 +90,11 @@ body {
 }
 
 body {
-  min-height: 100%;
+  min-height: 100dvh;
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 16px;
+  font-size: var(--fs-body);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -58,20 +112,30 @@ a {
 
 /* ---------------------------------------------------------------- layout */
 
+/* Three widths instead of one: narrow (default), reading, wide. Every page keeps
+   <main class="shell"> and adds a modifier when it needs more room. */
 .shell {
   width: 100%;
-  max-width: var(--max);
+  max-width: var(--max-narrow);
   margin: 0 auto;
-  padding: 20px 16px calc(32px + env(safe-area-inset-bottom));
+  padding: var(--space-5) var(--gutter) calc(var(--space-6) + env(safe-area-inset-bottom));
+}
+
+.shell--reading {
+  max-width: var(--max-reading);
+}
+
+.shell--wide {
+  max-width: var(--max-wide);
 }
 
 .topbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
   min-height: 44px;
-  margin-bottom: 4px;
-  font-size: 14px;
+  margin-bottom: var(--space-1);
+  font-size: var(--fs-ui);
   color: var(--muted);
 }
 
@@ -79,51 +143,63 @@ a {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  padding-right: 8px;
+  padding-right: var(--space-2);
   font-weight: 500;
   color: var(--accent);
 }
 
-.card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 16px;
+/* Rhythm: tight inside a group, loose between sections. A uniform 12px was the
+   main reason every page read as one flat block (DESIGN 5.6). */
+.stack > * + * {
+  margin-top: var(--space-4);
 }
 
-.stack > * + * {
-  margin-top: 12px;
+.stack > section + section {
+  margin-top: var(--space-6);
 }
+
+.center {
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------- type */
 
 .eyebrow {
-  font-size: 13px;
+  font-size: var(--fs-caption);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
 }
 
+h1,
+h2 {
+  text-wrap: balance;
+}
+
 h1 {
-  font-size: 24px;
-  line-height: 1.25;
-  font-weight: 650;
+  font-size: var(--fs-display);
+  line-height: 1.2;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 
 h2 {
-  font-size: 18px;
+  font-size: var(--fs-title);
   line-height: 1.3;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .lede {
   color: var(--muted);
-  font-size: 15px;
+  font-size: var(--fs-ui);
+  text-wrap: pretty;
 }
 
 .meta {
   display: grid;
-  gap: 6px;
-  font-size: 15px;
+  gap: var(--space-2);
+  font-size: var(--fs-ui);
   color: var(--muted);
 }
 
@@ -133,37 +209,68 @@ h2 {
 }
 
 .day-heading {
-  margin: 20px 0 10px;
-  font-size: 14px;
+  margin: var(--space-5) 0 var(--space-3);
+  font-size: var(--fs-caption);
   font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--muted);
+}
+
+/* One global .hint rule. Before this, .hint only existed inside .field, so the
+   same class rendered at 13 / 15 / 16px depending on where it landed — and the
+   "belum tentu sudah dibayar" paragraph on /users read as body copy. */
+.hint {
+  font-size: var(--fs-caption);
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+/* Typography class, not a size class: .lede.mono must keep the .lede size. */
+.mono {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- surface */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+  padding: var(--space-4);
 }
 
 /* ---------------------------------------------------------------- slots */
 
 .slots {
   display: grid;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .slot {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 2px 12px;
+  gap: var(--space-1) var(--space-3);
   width: 100%;
   min-height: 64px;
-  padding: 12px 14px;
+  padding: var(--space-3) var(--space-4);
   text-align: left;
   font: inherit;
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-1);
 }
 
+/* Ticket motif: an accent bar down the left edge, drawn as an inset shadow so it
+   costs no layout shift, plus a dashed rule before the price. */
 .slot--open {
   border-color: var(--accent);
+  box-shadow: inset 4px 0 0 var(--accent), var(--shadow-1);
   cursor: pointer;
 }
 
@@ -172,28 +279,41 @@ h2 {
 }
 
 .slot--taken {
-  background: #f2efeb;
-  border-color: #8a8178; /* 3.5:1 against the page bg — the boundary is the only cue */
+  background: var(--surface-sunken);
+  border-color: var(--line-strong); /* 3.08:1 against its own fill — do not darken the fill */
+  box-shadow: none;
   color: var(--muted);
   cursor: not-allowed;
 }
 
 .slot__time {
-  font-size: 17px;
+  font-size: var(--fs-title);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
+/* Four cues separate an open slot from a taken one (bar, weight, fill, colour),
+   so the choice survives a greyscale screenshot or a colour-vision deficiency. */
+.slot--taken .slot__time {
+  font-weight: 500;
+}
+
 .slot__price {
-  font-size: 15px;
+  padding-left: var(--space-3);
+  font-size: var(--fs-ui);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
+/* Ticket rule between the time and the price — only on a slot you can still take. */
+.slot--open .slot__price {
+  border-left: 1px dashed var(--line-strong);
+}
+
 .slot__status {
   grid-column: 1 / -1;
-  font-size: 13px;
+  font-size: var(--fs-caption);
   color: var(--muted);
 }
 
@@ -205,17 +325,17 @@ h2 {
 .slot__badge {
   grid-column: 1 / -1;
   justify-self: start;
-  margin-top: 4px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 13px;
+  margin-top: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-caption);
   font-weight: 600;
   background: var(--ok-soft);
   color: var(--ok);
 }
 
 .slot--taken .slot__badge {
-  background: #e7e2db;
+  background: var(--chip);
   color: var(--muted);
 }
 
@@ -223,11 +343,17 @@ h2 {
 
 .field {
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
+}
+
+/* Two fields side by side from 768px up; stacked below it. */
+.field-row {
+  display: grid;
+  gap: var(--space-4);
 }
 
 .field label {
-  font-size: 15px;
+  font-size: var(--fs-ui);
   font-weight: 600;
 }
 
@@ -238,27 +364,22 @@ fieldset {
 fieldset legend,
 .field-label {
   padding: 0;
-  margin-bottom: 6px;
-  font-size: 18px;
+  margin-bottom: var(--space-2);
+  font-size: var(--fs-title);
   font-weight: 600;
   line-height: 1.3;
-}
-
-.field .hint {
-  font-size: 13px;
-  color: var(--muted);
 }
 
 .field input,
 .field textarea {
   width: 100%;
   min-height: 48px;
-  padding: 12px;
+  padding: var(--space-3);
   font: inherit;
-  font-size: 16px; /* iOS: no zoom-on-focus below 16px */
+  font-size: var(--fs-body); /* iOS: no zoom-on-focus below 16px */
   color: var(--ink);
   background: var(--surface);
-  border: 1px solid #8a8178; /* 3.8:1 on white — WCAG 1.4.11 needs 3:1 for the control boundary */
+  border: 1px solid var(--line-strong); /* 3.82:1 on white — WCAG 1.4.11 needs 3:1 */
   border-radius: var(--radius-sm);
 }
 
@@ -273,7 +394,7 @@ fieldset legend,
 }
 
 .field-error {
-  font-size: 14px;
+  font-size: var(--fs-ui);
   color: var(--accent);
 }
 
@@ -281,17 +402,36 @@ fieldset legend,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
   min-height: 48px;
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   font: inherit;
-  font-size: 16px;
+  font-size: var(--fs-body);
   font-weight: 600;
   text-align: center;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
   cursor: pointer;
+}
+
+/* Busy marker without touching the label: the text stays exactly as it is
+   ("Menyimpan…", "Mencari…"), a ring is added beside it. */
+.btn[aria-busy="true"]::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--radius-pill);
+  animation: btn-busy 700ms linear infinite;
+}
+
+@keyframes btn-busy {
+  to {
+    transform: rotate(1turn);
+  }
 }
 
 .btn--primary {
@@ -300,39 +440,43 @@ fieldset legend,
 }
 
 .btn--primary:hover {
-  background: #96300e;
+  background: var(--accent-strong);
+}
+
+.btn--primary:active {
+  transform: translateY(1px);
 }
 
 .btn--primary:disabled {
   /* Disabled controls are exempt from WCAG 1.4.3, but a washed-out white-on-grey
-     (2.2:1) reads as "loading" rather than "unavailable". 6.5:1 says it plainly. */
-  background: #d9d3cb;
-  color: #4a443e;
+     (2.2:1) reads as "loading" rather than "unavailable". 6.46:1 says it plainly. */
+  background: var(--disabled-bg);
+  color: var(--disabled-ink);
   cursor: not-allowed;
 }
 
 .btn--secondary {
   background: var(--surface);
   color: var(--ink);
-  border-color: #8a8178; /* same 3:1 control-boundary requirement as inputs */
+  border-color: var(--line-strong); /* same 3:1 control-boundary requirement as inputs */
 }
 
 .btn--secondary:hover {
-  background: #f2efeb;
+  background: var(--surface-sunken);
 }
 
 .btn--secondary:disabled {
   /* The admin toggle buttons are inert until a slot-status endpoint exists; they
      must not look tappable. */
   color: var(--muted);
-  border-color: #b9aca4;
-  background: #f2efeb;
+  border-color: var(--disabled-line);
+  background: var(--surface-sunken);
   cursor: not-allowed;
 }
 
 .btn-row {
   display: grid;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 /* Two buttons side by side inside a row that already has a label column. */
@@ -340,14 +484,23 @@ fieldset legend,
   grid-auto-flow: column;
 }
 
-.btn-row--inline .btn {
+/* One scale: full-width 48px / body, in-row 44px / ui. The old .slot-row .btn
+   override used 12px padding and made "Hapus" differ from "Hapus hari". */
+.btn-row--inline .btn,
+.slot-row .btn {
   width: auto;
   min-height: 44px;
-  padding: 8px 14px;
-  font-size: 15px;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--fs-ui);
 }
 
+/* 44px touch target: measured 19px (/login, /register) and 18px (/onboarding)
+   when this was a bare inline link. */
 .link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-inline: var(--space-1);
   color: var(--accent);
   font-weight: 600;
   text-decoration: underline;
@@ -355,22 +508,22 @@ fieldset legend,
 }
 
 .notice {
-  padding: 12px 14px;
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
-  font-size: 15px;
+  font-size: var(--fs-ui);
   border: 1px solid var(--line);
   background: var(--surface);
 }
 
 .notice--warn {
   background: var(--warn-soft);
-  border-color: #efd7b8;
+  border-color: var(--warn-line);
   color: var(--warn-ink);
 }
 
 .notice--ok {
   background: var(--ok-soft);
-  border-color: #cfe4d6;
+  border-color: var(--ok-line);
   color: var(--ok);
 }
 
@@ -378,15 +531,15 @@ fieldset legend,
 
 .summary {
   display: grid;
-  gap: 10px;
-  font-size: 15px;
+  gap: var(--space-3);
+  font-size: var(--fs-ui);
 }
 
 .summary div {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 10px;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--line);
 }
 
@@ -398,17 +551,18 @@ fieldset legend,
 .summary dt {
   color: var(--muted);
   flex: 0 0 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
+/* An unbroken event title used to overflow to right:528 at a 390px viewport and
+   was then clipped by html{overflow-x:hidden} — hidden, not wrapped. */
 .summary dd {
   margin: 0;
+  min-width: 0;
   text-align: right;
   font-weight: 600;
-}
-
-.mono {
-  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 
@@ -417,7 +571,7 @@ fieldset legend,
 .qr {
   display: grid;
   justify-items: center;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .qr img {
@@ -426,37 +580,26 @@ fieldset legend,
   height: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: #fff;
+  background: var(--surface);
 }
 
 .slot-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 8px 12px;
-  padding: 12px 14px;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--surface);
 }
 
-.slot-row .btn {
-  width: auto;
-  min-height: 44px;
-  padding: 8px 12px;
-  font-size: 15px;
+.slot-row:hover {
+  background: var(--surface-sunken);
 }
 
-/* Three inline buttons beside the time leave ~59px for the time column at 390px,
-   which wraps "10.00–10.30 WIB" onto three lines. Stack them under the time. */
-@media (max-width: 520px) {
-  .slot-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .slot-row .btn-row--inline {
-    grid-auto-columns: 1fr;
-  }
+.slot-row .btn-row--inline {
+  grid-auto-columns: 1fr;
 }
 
 /* Reason text and errors sit under the whole row, not in the button column. */
@@ -464,7 +607,7 @@ fieldset legend,
 .slot-row__error {
   grid-column: 1 / -1;
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fs-caption);
   line-height: 1.4;
 }
 
@@ -475,24 +618,21 @@ fieldset legend,
 .slot-row__error {
   color: var(--warn-ink);
   background: var(--warn-soft);
-  border: 1px solid #efd7b8;
+  border: 1px solid var(--warn-line);
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
-}
-
-.center {
-  text-align: center;
+  padding: var(--space-2) var(--space-3);
 }
 
 /* ---------------------------------------------------------------- event list */
 
 .event-row {
   display: grid;
-  gap: 4px;
-  padding: 14px;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-1);
   min-height: 64px;
 }
 
@@ -502,38 +642,45 @@ fieldset legend,
 }
 
 .event-row__title {
-  font-size: 17px;
+  font-size: var(--fs-title);
   font-weight: 600;
 }
 
 .event-row__meta {
-  font-size: 14px;
+  font-size: var(--fs-ui);
   color: var(--muted);
 }
 
 .badge {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 13px;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  font-size: var(--fs-caption);
   font-weight: 600;
 }
 
+/* Published vs draft must not be a colour-only difference: the border style
+   (solid vs dashed) survives greyscale and colour-vision deficiency. */
 .badge--draft {
-  background: #e7e2db;
-  color: #4a443e; /* 8.4:1 on #e7e2db */
+  background: var(--chip);
+  color: var(--chip-ink); /* 7.12:1 on --chip */
+  border-style: dashed;
+  border-color: var(--chip-ink);
 }
 
 .badge--published {
   background: var(--ok-soft);
-  color: var(--ok); /* 5.3:1 on #e8f3ec */
+  color: var(--ok); /* 5.73:1 on --ok-soft */
+  border-style: solid;
+  border-color: var(--ok);
 }
 
 /* Day + slot blocks in the event editor. */
 .day-block {
   display: grid;
-  gap: 10px;
-  padding: 14px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -544,18 +691,18 @@ fieldset legend,
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .day-block__title {
-  font-size: 16px;
+  font-size: var(--fs-body);
   font-weight: 600;
 }
 
 .btn--danger {
   background: var(--surface);
-  color: #8f2c0b;
-  border-color: #c98d78;
+  color: var(--danger-ink); /* 8.29:1 on white */
+  border-color: var(--danger-line); /* 5.22:1 on white, 4.59:1 on hover — was 2.78 / 2.45 */
 }
 
 .btn--danger:hover {
@@ -566,21 +713,21 @@ fieldset legend,
    like the live delete button next to them. Same treatment as btn--secondary:disabled. */
 .btn--danger:disabled {
   color: var(--muted);
-  border-color: #b9aca4;
-  background: #f2efeb;
+  border-color: var(--disabled-line);
+  background: var(--surface-sunken);
   cursor: not-allowed;
 }
 
 /* Explicit confirmation panel for the one action that kills a shared link. */
 .confirm {
   display: grid;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   background: var(--warn-soft);
-  border: 1px solid #efd7b8;
+  border: 1px solid var(--warn-line);
   border-radius: var(--radius-sm);
   color: var(--warn-ink);
-  font-size: 15px;
+  font-size: var(--fs-ui);
 }
 
 .check {
@@ -588,18 +735,12 @@ fieldset legend,
   place-items: center;
   width: 56px;
   height: 56px;
-  margin: 8px auto 0;
-  border-radius: 999px;
+  margin: var(--space-2) auto 0;
+  border-radius: var(--radius-pill);
   background: var(--ok-soft);
   color: var(--ok);
   font-size: 28px;
   font-weight: 700;
-}
-
-@media (min-width: 520px) {
-  .shell {
-    padding-top: 40px;
-  }
 }
 
 /* ---------------------------------------------------------------- admin nav */
@@ -614,26 +755,27 @@ fieldset legend,
   z-index: 10;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
+  box-shadow: var(--shadow-1);
 }
 
 .admin-nav-inner {
   width: 100%;
-  max-width: var(--max);
+  max-width: var(--max-wide);
   margin: 0 auto;
-  padding: 0 16px;
+  padding: 0 var(--gutter);
 }
 
 .admin-nav {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .admin-nav__tab {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  padding: 0 14px;
-  font-size: 15px;
+  padding: 0 var(--space-4);
+  font-size: var(--fs-ui);
   font-weight: 600;
   color: var(--muted);
   border-bottom: 2px solid transparent;
@@ -651,3 +793,385 @@ fieldset legend,
   border-bottom-color: var(--accent);
 }
 
+/* ---------------------------------------------------------------- motion */
+
+/* Only colour, shadow and transform move. No entrance animations. */
+.btn,
+.slot,
+.event-row,
+.slot-row,
+.field input,
+.field textarea,
+.admin-nav__tab,
+.badge {
+  transition:
+    background-color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    box-shadow var(--dur-2) var(--ease),
+    transform var(--dur-1) var(--ease);
+}
+
+/* Lift only where a real pointer can hover — a touch device would otherwise keep
+   the row raised after a tap. */
+@media (hover: hover) and (pointer: fine) {
+  .event-row:hover,
+  .slot--open:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-2);
+  }
+
+  .slot--open:hover {
+    box-shadow: inset 4px 0 0 var(--accent), var(--shadow-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------- responsive */
+
+/* 360px and below an inline button row can no longer fit its labels side by
+   side. Let it stack rather than push past the edge — this is the WCAG 1.4.10
+   reflow case (320px viewport, or 390px at 200% zoom). */
+@media (max-width: 359px) {
+  .btn-row--inline {
+    grid-auto-flow: row;
+  }
+
+  .btn-row--inline .btn,
+  .slot-row .btn {
+    width: 100%;
+  }
+}
+
+/* 520px — the point where a 480px shell stops being the whole screen. */
+@media (min-width: 520px) {
+  .shell {
+    padding-top: var(--space-7);
+  }
+
+  .slot-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  /* Above 520px the three inline buttons size to their labels; below it they share
+     the full width, because three buttons beside the time left ~59px for it and
+     wrapped "10.00–10.30 WIB" onto three lines. */
+  .slot-row .btn-row--inline {
+    grid-auto-columns: auto;
+  }
+
+  /* Public slot list: two columns as soon as the reading width allows it. */
+  .slots--grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+}
+
+/* 768px — tablet: cards get room, dense admin lists go two-up. */
+@media (min-width: 768px) {
+  .card {
+    padding: var(--space-5);
+  }
+
+  /* Narrow pages keep one column; the card is simply centred with more air above. */
+  .shell:not(.shell--reading):not(.shell--wide) .card {
+    box-shadow: var(--shadow-2);
+  }
+
+  /* auto-fit, not a fixed track count: with two photographers a fixed 3-track
+     grid left an empty third column. auto-fit collapses unused tracks, so the
+     cards stretch instead. */
+  .slots--events,
+  .slots--cards {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+
+  /* Start/end time sit side by side in the new-event form. DOM order is untouched. */
+  .field-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* 1024px — desktop: the event editor becomes two columns. Status stays first in the
+   DOM (so a screen reader still reads Status → Hari → QR); only its grid area moves. */
+@media (min-width: 1024px) {
+  .editor {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 22rem);
+    grid-template-areas:
+      "days status"
+      "days warn"
+      "days qr";
+    grid-template-rows: auto auto 1fr;
+    align-content: start;
+    gap: var(--space-5);
+  }
+
+  .editor > *,
+  .editor.stack > * {
+    margin-top: 0;
+  }
+
+  .editor__status {
+    grid-area: status;
+  }
+
+  .editor__warn {
+    grid-area: warn;
+  }
+
+  .editor__days {
+    grid-area: days;
+  }
+
+  .editor__qr {
+    grid-area: qr;
+    position: sticky;
+    top: calc(44px + var(--space-5));
+  }
+
+  /* QrCard renders its own <section class="card qr">; it needs no extra prop.
+     The last row takes the leftover height (1fr) and the card sits at its top, so
+     spare space lands below the QR instead of opening a hole under Status. */
+  .editor > .qr {
+    grid-area: qr;
+    align-self: start;
+    position: sticky;
+    top: calc(44px + var(--space-5));
+  }
+}
+
+/* 1200px — wide screens give the photographer cards a fourth track. auto-fit
+   already handles 2 or 3; this only caps how wide a single card may get. */
+@media (min-width: 1200px) {
+  .slots--cards {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+}
+
+/* ---------------------------------------------------------------- landing (/login) */
+
+/* /login is the landing page (docs/LANDING-LOGIN.md). Presentation only: the DOM order
+   below is also the screen-reader order, so the wide two-column split is done with
+   grid-template-areas, never by reordering a node. Everything here reads from the
+   :root tokens above — no new hex, no new hue. */
+
+.landing {
+  display: grid;
+  gap: var(--space-6);
+  padding-bottom: calc(var(--space-7) + env(safe-area-inset-bottom));
+}
+
+.landing__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  min-height: 44px;
+}
+
+.landing__logo {
+  display: block;
+  width: 100%;
+  max-width: 180px;
+  height: auto;
+}
+
+.landing__foot {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--line);
+}
+
+/* Mobile-first single column: hero → login → preview → steps. */
+.page {
+  display: grid;
+  gap: var(--space-6);
+  grid-template-areas:
+    "hero"
+    "login"
+    "preview"
+    "steps";
+}
+
+/* min-width:0 on every grid child: a grid item defaults to min-width:auto, which is
+   what turns one long unbroken string into horizontal overflow. */
+.page > * {
+  min-width: 0;
+}
+
+.hero {
+  grid-area: hero;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.login {
+  grid-area: login;
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  box-shadow: var(--shadow-2);
+}
+
+/* Inside the card, groups are separated by a hairline rather than another box
+   (DESIGN-NEW 7.2 §3: no card-in-card). */
+.login > .stack {
+  margin-top: var(--space-1);
+}
+
+.login > .stack > * + * {
+  margin-top: var(--space-2);
+}
+
+/* The preview is a column, not the full page: at 960px it is 533px wide, and the shared
+   .slots--grid rule (220px min) would then give each demo slot ~260px — enough to break
+   "10.00–10.30 WIB" onto two lines. Measured: one line needs ~300px of slot, so two
+   columns need ~620px of container. A container query sizes the demo to the space it
+   actually has, so it stays one column until the column itself is wide. */
+.preview {
+  grid-area: preview;
+  display: grid;
+  gap: var(--space-3);
+  container-type: inline-size;
+}
+
+.preview .slots--grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@container (min-width: 620px) {
+  .preview .slots--grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Doc §6: the dashed rule before the price is on both slot states, not just the open one. */
+.preview .slot--taken .slot__price {
+  border-left: 1px dashed var(--line-strong);
+}
+
+/* The preview slots are an illustration, not controls: no pointer, no hover fill, no
+   lift. The global .slot--open:hover rules would otherwise make them look tappable. */
+.slot--demo,
+.slot--demo:hover {
+  cursor: default;
+  background: var(--surface);
+  transform: none;
+  box-shadow: inset 4px 0 0 var(--accent), var(--shadow-1);
+}
+
+/* A demo price/time is placeholder text, not data — it must wrap instead of pushing
+   past the edge at 195px CSS (390px at 200% zoom). */
+.preview .slot__time,
+.preview .slot__price {
+  overflow-wrap: anywhere;
+}
+
+.steps {
+  grid-area: steps;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.steps__list {
+  display: grid;
+  gap: var(--space-4);
+  padding-left: var(--space-5);
+}
+
+/* Number in the accent, not a new element: ::marker keeps the <ol> semantics intact. */
+.steps__list li::marker {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.steps__item {
+  display: grid;
+  gap: var(--space-1);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+
+.steps__item:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.steps__item h3 {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+/* 520px — the preview slots go two-up through the shared .slots--grid rule. */
+@media (min-width: 520px) {
+  .landing__logo {
+    max-width: 200px;
+  }
+}
+
+/* 768px — tablet: the login card picks up the roomier .card padding from the rule
+   above; the three steps become columns and lose their divider. */
+@media (min-width: 768px) {
+  .landing {
+    padding-top: var(--space-7);
+  }
+
+  .steps__list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-5);
+    padding-left: 0;
+    list-style-position: inside;
+  }
+
+  .steps__item {
+    padding-top: 0;
+    border-top: 0;
+  }
+}
+
+/* 960px — two columns: hero + preview left, login card right and sticky. The step list
+   returns to full width underneath. */
+@media (min-width: 960px) {
+  .page {
+    grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
+    grid-template-areas:
+      "hero login"
+      "preview login"
+      "steps steps";
+    align-items: start;
+    gap: var(--space-6) var(--space-7);
+  }
+
+  .login {
+    position: sticky;
+    top: var(--space-5);
+  }
+
+  .landing__logo {
+    max-width: 220px;
+  }
+}
+
+/* ---------------------------------------------------------- landing logo (LOGIN-2) */
+
+/* "Rapat ke sisi kiri" = ink flush with the page gutter, not with the img box.
+   The logo SVG carries internal padding: its ink starts 43 of 511 viewBox units in, so
+   at the 180px render width the box sits at x=16 while the first painted pixel is at
+   x=31.1468 — 15.1468px of empty box. A negative margin-left would also work, but it
+   moves the box and therefore the flex line; transform reflows nothing.
+   Percentage, not px: translate % resolves against the element's own border-box width,
+   so the same 43/511 ratio holds when max-width steps to 200px (>=520px) and 220px
+   (>=960px), and when the box shrinks below 180px at 200% zoom. */
+.landing__logo {
+  transform: translateX(-8.4149%);
+}

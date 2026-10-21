@@ -193,14 +193,16 @@ export function NewEventForm({ photographerId }: { photographerId?: string } = {
             <input id="day_date" name="day_date" type="date" required />
           </div>
 
-          <div className="field">
-            <label htmlFor="start_time">Jam mulai</label>
-            <input id="start_time" name="start_time" type="time" required defaultValue="09:00" />
-          </div>
+          <div className="field-row">
+            <div className="field">
+              <label htmlFor="start_time">Jam mulai</label>
+              <input id="start_time" name="start_time" type="time" required defaultValue="09:00" />
+            </div>
 
-          <div className="field">
-            <label htmlFor="end_time">Jam selesai</label>
-            <input id="end_time" name="end_time" type="time" required defaultValue="17:00" />
+            <div className="field">
+              <label htmlFor="end_time">Jam selesai</label>
+              <input id="end_time" name="end_time" type="time" required defaultValue="17:00" />
+            </div>
           </div>
 
           <p className="hint">Jam dalam WIB (Asia/Jakarta).</p>

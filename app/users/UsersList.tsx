@@ -117,7 +117,7 @@ export function UsersList({ initial }: { initial: Payload }) {
           </p>
         </div>
       ) : (
-        <div className="slots">
+        <div className="slots slots--cards">
           {rows.map((row) => (
             <PhotographerCard key={row.photographer_id} row={row} />
           ))}
