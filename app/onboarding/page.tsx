@@ -7,6 +7,7 @@ import { DbNotMigratedError, throwIfSchemaError } from "@/lib/db-errors";
 import { ServerNotReady } from "@/app/_components/ServerNotReady";
 import { DbNotReady } from "@/app/_components/DbNotReady";
 import { LogoutButton } from "@/app/admin/LogoutButton";
+import { ResubmitButton } from "@/app/_components/ResubmitButton";
 import { OnboardingForm } from "./OnboardingForm";
 
 export const metadata = { title: "Lengkapi data studio — Booking Sesi Foto" };
@@ -41,20 +42,25 @@ type Registration = {
   studio_name: string | null;
   contact_wa: string | null;
   email: string | null;
+  note: string | null;
 };
 
 /**
  * The landing page for a Google signup, and the place a password signup can top up.
  *
- * Reads `my_registration_status()` (0013) — the caller's own row, `security definer`,
- * granted to `authenticated` only. Not a select on `access_requests`: that would need the
- * caller to know his own user_id and would put the "which row is mine" rule in two places.
+ * Reads `my_registration_status()` (0013; `note` since 0017) — the caller's own row,
+ * `security definer`, granted to `authenticated` only. Not a select on `access_requests`:
+ * that would need the caller to know his own user_id and would put the "which row is mine"
+ * rule in two places.
  *
  * Branch table, top to bottom:
  *   no session                     → /login
  *   no registration row            → "tidak punya pendaftaran" + /register
  *   approved                       → /admin
- *   rejected                       → refusal text, no form
+ *   rejected                       → refusal + admin's note + "Ajukan ulang"
+ *                                    (`?edit=1` opens the form instead: 0017 lets a
+ *                                    rejected row be filled in, so "perbaiki dulu" is a
+ *                                    real path and not a dead end)
  *   pending, fields empty          → form
  *   pending, fields filled         → waiting card (+ `?edit=1` re-opens the form)
  */
@@ -93,24 +99,78 @@ async function Content(searchParams: Props["searchParams"]) {
 
   if (registration.status === "approved") redirect("/admin");
 
+  const studioName = registration.studio_name?.trim() ?? "";
+  const contactWa = registration.contact_wa?.trim() ?? "";
+  const complete = studioName.length > 0 && contactWa.length > 0;
+
   if (registration.status === "rejected") {
+    const reason = registration.note?.trim();
+
+    // `?edit=1`: the form, with the refusal still visible above it. 0017 lets
+    // `complete_registration` write a rejected row, so the user fixes his own data instead
+    // of asking an admin to edit the database.
+    if (edit === "1") {
+      return (
+        <div className="stack">
+          <header className="stack">
+            <p className="eyebrow">Pendaftaran ditolak</p>
+            <h1>Perbaiki data studio</h1>
+            <p className="lede">
+              {reason
+                ? "Alasan penolakan ada di bawah. Setelah datanya diperbaiki, ajukan ulang dari halaman status."
+                : "Perbaiki data studio, lalu ajukan ulang dari halaman status."}
+            </p>
+          </header>
+
+          {reason ? (
+            <div className="notice notice--warn">
+              <p className="eyebrow">Alasan dari admin</p>
+              <p>{reason}</p>
+            </div>
+          ) : null}
+
+          <OnboardingForm
+            initialStudioName={studioName}
+            initialContactWa={contactWa}
+            changing
+            doneHref="/onboarding"
+          />
+
+          <Link className="btn btn--secondary" href="/onboarding">
+            Batal, kembali ke status
+          </Link>
+          <LogoutButton />
+        </div>
+      );
+    }
+
     return (
       <div className="card stack">
         <p className="eyebrow">Pendaftaran ditolak</p>
         <h1>Akses studio belum diberikan.</h1>
         <p className="lede">
           Admin menolak permintaan akses untuk <strong>{registration.email}</strong>. Data
-          yang kamu kirim tidak bisa diubah dari halaman ini. Hubungi admin kalau menurutmu
-          ini keliru.
+          yang kamu kirim masih tersimpan — kamu bisa memperbaikinya, lalu mengajukan ulang
+          tanpa membuat akun baru.
         </p>
+
+        {reason ? (
+          <div className="notice notice--warn">
+            <p className="eyebrow">Alasan dari admin</p>
+            <p>{reason}</p>
+          </div>
+        ) : null}
+
+        <ResubmitButton />
+
+        <Link className="btn btn--secondary" href="/onboarding?edit=1">
+          Ubah data studio dulu
+        </Link>
+
         <LogoutButton />
       </div>
     );
   }
-
-  const studioName = registration.studio_name?.trim() ?? "";
-  const contactWa = registration.contact_wa?.trim() ?? "";
-  const complete = studioName.length > 0 && contactWa.length > 0;
 
   if (complete && edit !== "1") {
     return (

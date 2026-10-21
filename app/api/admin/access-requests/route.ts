@@ -10,12 +10,13 @@ import { isUuid } from "@/lib/bookings";
 /**
  * GET /api/admin/access-requests            → pending only (the default queue)
  * GET /api/admin/access-requests?status=all → every request, any status
+ * GET /api/admin/access-requests?status=rejected → the rejected tab
  */
 export async function GET(request: Request) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
 
-  const all = new URL(request.url).searchParams.get("status") === "all";
+  const status = new URL(request.url).searchParams.get("status");
 
   try {
     let query = guard.supabase
@@ -25,7 +26,11 @@ export async function GET(request: Request) {
       )
       .order("requested_at", { ascending: true });
 
-    if (!all) query = query.eq("status", "pending");
+    if (status === "rejected") {
+      query = query.eq("status", "rejected").order("decided_at", { ascending: false });
+    } else if (status !== "all") {
+      query = query.eq("status", "pending");
+    }
 
     const { data, error } = await query;
     if (error) {
@@ -53,13 +58,20 @@ export async function GET(request: Request) {
 
 /**
  * POST /api/admin/access-requests
- * body: { request_id: uuid, action: "approve" | "reject", note?: string }
+ * body: { request_id: uuid, action: "approve" | "reject" | "restore", note?: string }
  *
  * Approve creates the photographer row (slug generated in SQL) and returns it, so
  * the caller can show the studio slug without a second round trip.
+ *
+ * `restore` is `admin_restore_access_request(uuid)` (0017): a rejected row back to
+ * `pending`, so the admin can change his mind without a SQL editor. The status rule lives
+ * in that function, not here — see the migration for why.
  */
 
 type Body = { request_id?: unknown; action?: unknown; note?: unknown };
+
+const ACTIONS = ["approve", "reject", "restore"] as const;
+type Action = (typeof ACTIONS)[number];
 
 export async function POST(request: Request) {
   const guard = await requireAdmin();
@@ -85,9 +97,9 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  if (action !== "approve" && action !== "reject") {
+  if (!ACTIONS.includes(action as Action)) {
     return Response.json(
-      { error: "invalid_request", message: 'action harus "approve" atau "reject".' },
+      { error: "invalid_request", message: 'action harus "approve", "reject", atau "restore".' },
       { status: 400 },
     );
   }
@@ -96,10 +108,14 @@ export async function POST(request: Request) {
     const { data, error } =
       action === "approve"
         ? await guard.supabase.rpc("approve_access_request", { p_request_id: requestId })
-        : await guard.supabase.rpc("reject_access_request", {
-            p_request_id: requestId,
-            p_note: note,
-          });
+        : action === "restore"
+          ? await guard.supabase.rpc("admin_restore_access_request", {
+              p_request_id: requestId,
+            })
+          : await guard.supabase.rpc("reject_access_request", {
+              p_request_id: requestId,
+              p_note: note,
+            });
 
     if (error) {
       const message = error.message ?? "";
@@ -110,16 +126,13 @@ export async function POST(request: Request) {
         );
       }
       if (/invalid_state/.test(message)) {
-        return Response.json(
-          {
-            error: "invalid_state",
-            message:
-              action === "approve"
-                ? "Permintaan ini sudah ditolak sebelumnya."
-                : "Permintaan ini sudah diputuskan.",
-          },
-          { status: 409 },
-        );
+        const text =
+          action === "approve"
+            ? "Permintaan ini sudah ditolak sebelumnya."
+            : action === "restore"
+              ? "Hanya pendaftaran yang ditolak yang bisa dipulihkan ke antrian."
+              : "Permintaan ini sudah diputuskan.";
+        return Response.json({ error: "invalid_state", message: text }, { status: 409 });
       }
       if (/incomplete_registration/.test(message)) {
         return Response.json(

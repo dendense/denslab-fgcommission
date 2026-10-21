@@ -33,10 +33,18 @@ export function OnboardingForm({
   initialStudioName,
   initialContactWa,
   changing,
+  doneHref,
 }: {
   initialStudioName: string;
   initialContactWa: string;
   changing: boolean;
+  /**
+   * Where to go after a successful save. `/onboarding?edit=1` re-renders the form it is
+   * already on, which is fine while `pending` (the field values are the feedback) but not
+   * while `rejected`: there the user needs to land back on the status card, where the
+   * "Ajukan ulang" button is. Omitted → `router.refresh()`, the existing behaviour.
+   */
+  doneHref?: string;
 }) {
   const router = useRouter();
   const [studioName, setStudioName] = useState(initialStudioName);
@@ -70,7 +78,8 @@ export function OnboardingForm({
         return;
       }
 
-      router.refresh();
+      if (doneHref) router.push(doneHref);
+      else router.refresh();
     } catch {
       setFormError({ message: "Tidak bisa menghubungi server. Coba lagi." });
     } finally {

@@ -21,7 +21,7 @@ export const instant = false;
 // below into a soft one and flash the admin shell at a logged-out visitor.
 export default function Page() {
   return (
-    <main className="shell">
+    <main className="shell shell--wide">
       <AdminView />
     </main>
   );
@@ -51,7 +51,13 @@ async function AdminView() {
  * Three doors, not one. An admin who has no `photographers` row of his own is still an
  * admin — that is the whole point of `admin_users` being a separate table — so the gate
  * asks `is_admin()` before deciding an account is unapproved.
+ *
+ * `Registration` is the shape `my_registration_status()` returns (0017 added `note`); it
+ * is declared here rather than imported because this page only ever reads `status` and
+ * `note` from it.
  */
+type Registration = { status: string; note: string | null };
+
 async function Content() {
   const supabase = await sessionClient();
 
@@ -102,7 +108,42 @@ async function Content() {
     const admin = await isAdmin(supabase);
 
     if (!admin) {
-      // Signed in, not a photographer, not an admin → the signup is still in the queue.
+      // Signed in, not a photographer, not an admin. Two different accounts land here and
+      // they must not get the same sentence: `pending` is in the queue, `rejected` was
+      // already decided against. 0017 added `note` to `my_registration_status()`, so this
+      // page can say which — before, a rejected user was told to wait for a decision that
+      // had already been made. No row at all (a pre-0005 account) falls through to the
+      // waiting text, because /register is where that gets fixed.
+      const { data: rows, error: statusError } = await supabase.rpc("my_registration_status");
+      throwIfSchemaError(statusError);
+      if (statusError) throw statusError;
+
+      const registration = ((rows ?? []) as Registration[])[0];
+
+      if (registration?.status === "rejected") {
+        const reason = registration.note?.trim();
+        return (
+          <div className="card stack">
+            <p className="eyebrow">Pendaftaran ditolak</p>
+            <h1>Akses studio belum diberikan.</h1>
+            <p className="lede">
+              Admin menolak permintaan akses untuk <strong>{auth.user.email}</strong>. Kamu
+              bisa memperbaiki data studio lalu mengajukan ulang dari halaman status.
+            </p>
+            {reason ? (
+              <div className="notice notice--warn">
+                <p className="eyebrow">Alasan dari admin</p>
+                <p>{reason}</p>
+              </div>
+            ) : null}
+            <Link className="btn btn--primary" href="/register">
+              Buka status pendaftaran
+            </Link>
+            <LogoutButton />
+          </div>
+        );
+      }
+
       return (
         <div className="card stack">
           <p className="eyebrow">Menunggu persetujuan</p>
@@ -131,7 +172,7 @@ async function Content() {
     listError = true;
   }
 
-  const pending = admin ? await readPending(supabase) : [];
+  const queue = admin ? await readQueue(supabase) : { pending: [], rejected: [] };
 
   return (
     <div className="stack">
@@ -143,12 +184,13 @@ async function Content() {
 
       {admin ? (
         <section className="stack">
-          <h2>Pendaftar menunggu persetujuan</h2>
+          <h2>Pendaftar</h2>
           <p className="lede">
             Menyetujui membuatkan studio untuk pendaftar itu. Menolak tidak menghapus
-            akunnya — hanya menutup akses.
+            akunnya — hanya menutup akses; pendaftar yang ditolak tetap bisa mengajukan
+            ulang sendiri, dan kamu bisa memulihkannya dari tab Ditolak.
           </p>
-          <AccessRequests initial={pending} />
+          <AccessRequests pending={queue.pending} rejected={queue.rejected} />
         </section>
       ) : null}
 
@@ -175,7 +217,7 @@ async function Content() {
               Ketuk event untuk mengatur hari, slot, dan tautan publiknya.
             </p>
 
-            <div className="slots">
+            <div className="slots slots--events">
               {events.map((event) => {
                 const { total, booked } = slotCounts(event);
                 const day = firstDayDate(event);
@@ -216,19 +258,48 @@ async function Content() {
   );
 }
 
-/** Pending queue. A missing `access_requests` table is "not migrated", not "empty". */
-async function readPending(supabase: SupabaseClient) {
-  const { data, error } = await supabase
-    .from("access_requests")
-    .select("id,email,display_name,studio_name,contact_wa,status,requested_at")
-    .eq("status", "pending")
-    .order("requested_at", { ascending: true });
+/**
+ * The queue, both tabs, in one read per status.
+ *
+ * `rejected` is here because 0017 made it actionable: without it an admin had no way to
+ * undo a rejection from the UI, and the applicant vanished from the page entirely.
+ * `decided_at` + `note` are selected for that tab (when and why), and `note` is null for
+ * a rejection written without a reason — the component prints nothing rather than
+ * "tanpa alasan".
+ *
+ * A missing `access_requests` table is "not migrated", not "empty": `throwIfSchemaError`
+ * turns it into the DbNotReady card instead of two empty tabs.
+ */
+async function readQueue(supabase: SupabaseClient) {
+  const select = "id,email,display_name,studio_name,contact_wa,status,requested_at,decided_at,note";
 
-  if (error) {
-    console.error("admin: access_requests read", error);
-    throwIfSchemaError(error);
+  const [pending, rejected] = await Promise.all([
+    supabase
+      .from("access_requests")
+      .select(select)
+      .eq("status", "pending")
+      .order("requested_at", { ascending: true }),
+    supabase
+      .from("access_requests")
+      .select(select)
+      .eq("status", "rejected")
+      .order("decided_at", { ascending: false }),
+  ]);
+
+  for (const [label, result] of [
+    ["pending", pending],
+    ["rejected", rejected],
+  ] as const) {
+    if (result.error) {
+      console.error(`admin: access_requests ${label} read`, result.error);
+      throwIfSchemaError(result.error);
+    }
   }
-  return (data ?? []) as AccessRequest[];
+
+  return {
+    pending: (pending.data ?? []) as AccessRequest[],
+    rejected: (rejected.data ?? []) as AccessRequest[],
+  };
 }
 
 /**
@@ -242,7 +313,7 @@ async function AdminWithoutStudio({
   email: string;
   supabase: SupabaseClient;
 }) {
-  const pending = await readPending(supabase);
+  const queue = await readQueue(supabase);
 
   return (
     <div className="stack">
@@ -253,12 +324,13 @@ async function AdminWithoutStudio({
       </header>
 
       <section className="stack">
-        <h2>Pendaftar menunggu persetujuan</h2>
+        <h2>Pendaftar</h2>
         <p className="lede">
           Menyetujui membuatkan studio untuk pendaftar itu. Menolak tidak menghapus
-          akunnya — hanya menutup akses.
+          akunnya — hanya menutup akses; pendaftar yang ditolak tetap bisa mengajukan
+          ulang sendiri, dan kamu bisa memulihkannya dari tab Ditolak.
         </p>
-        <AccessRequests initial={pending} />
+        <AccessRequests pending={queue.pending} rejected={queue.rejected} />
       </section>
 
       <section className="stack">
