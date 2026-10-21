@@ -26,7 +26,7 @@ export function OAuthErrorNotice() {
   return (
     <div className="notice notice--warn" role="alert">
       <p>
-        <strong>Google gagal.</strong> Coba lagi, atau pakai email dan password di bawah.
+        <strong>Google gagal.</strong> Coba lagi, atau hubungi admin kalau terus gagal.
       </p>
       <p className="mono">code: {code}</p>
       {description ? <p className="mono">message: {description}</p> : null}

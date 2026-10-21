@@ -6,7 +6,8 @@ import { browserClient } from "@/lib/supabase-browser";
 type OAuthError = { code: string; message: string };
 
 /**
- * "Masuk dengan Google", next to the email/password form — not instead of it.
+ * "Masuk dengan Google" — the only way in. There is no email/password form to fall back
+ * to, so this button is the whole auth surface of /login and /register.
  *
  * `redirectTo` is built from `window.location.origin`, not from an env var: the same
  * build runs on localhost and on the deployed host, and Supabase only accepts a
@@ -68,8 +69,8 @@ export function GoogleButton() {
         {error ? (
           <div className="notice notice--warn">
             <p>
-              <strong>Google gagal.</strong> Coba lagi, atau pakai email dan password di
-              bawah.
+              <strong>Google gagal.</strong> Coba lagi, atau hubungi admin kalau terus
+              gagal.
             </p>
             <p className="mono">code: {error.code}</p>
             <p className="mono">message: {error.message}</p>

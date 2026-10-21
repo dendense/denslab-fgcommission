@@ -6,7 +6,7 @@ import { isAdmin, sessionClient } from "@/lib/auth";
 import { DbNotMigratedError, throwIfSchemaError } from "@/lib/db-errors";
 import { ServerNotReady } from "@/app/_components/ServerNotReady";
 import { DbNotReady } from "@/app/_components/DbNotReady";
-import { RegisterForm } from "./RegisterForm";
+import { GoogleButton } from "@/app/_components/GoogleButton";
 
 export const metadata = { title: "Daftar — Booking Sesi Foto" };
 
@@ -15,17 +15,21 @@ export const instant = false;
 
 /**
  * Public signup page, gated in front: someone who already holds a session has nothing to
- * do here, and the form must not even be sent to them.
+ * do here, and the Google button must not even be sent to them.
+ *
+ * Signup is Google-only. The account is created by Supabase from the Google identity, the
+ * `handle_new_user` trigger (0005) puts it in the approval queue, and the studio name +
+ * WhatsApp number are filled in afterwards on /onboarding — never here.
  *
  * Three answers for a signed-in visitor, matching the /login and /admin gates:
  *
  *   photographers row                → /admin
  *   no row, but is_admin() is true   → /admin  (an admin needs no studio of his own)
  *   no row, not an admin             → "menunggu persetujuan" (signup is in the queue)
- *   no session                       → the form, exactly as before
+ *   no session                       → the Google button
  *
  * The gate is here rather than in the browser so the redirect is a real HTTP one and the
- * form markup never leaves the server for a signed-in user.
+ * button markup never leaves the server for a signed-in user.
  *
  * "Do I own a studio?" is `current_photographer_id()` (0004), NOT a select on
  * `photographers`: since 0010 added `photographers_admin_select` (`using (is_admin())`),
@@ -63,10 +67,10 @@ async function Content(searchParams: Props["searchParams"]) {
 
   const { data: auth, error: authError } = await supabase.auth.getUser();
   // No session: the public path. This is the page's reason to exist.
-  if (authError || !auth.user) return <RegisterForm />;
+  if (authError || !auth.user) return <Signup />;
 
   // Arrived from /auth/callback with a session but no `access_requests` row: say so here,
-  // where the form is, instead of leaving them on a page that looks like a fresh signup.
+  // where signup lives, instead of leaving them on a page that looks like a fresh signup.
   if (searchError === "no_registration") return <NoRegistration />;
 
   const { data: studioId, error: studioError } = await supabase.rpc("current_photographer_id");
@@ -84,6 +88,27 @@ async function Content(searchParams: Props["searchParams"]) {
   return <Pending email={auth.user.email ?? ""} />;
 }
 
+function Signup() {
+  return (
+    <div className="stack">
+      <header className="stack">
+        <p className="eyebrow">Daftar</p>
+        <h1>Daftar dengan akun Google</h1>
+        <p className="lede">
+          Pendaftaran memakai akun Google. Setelah masuk, isi nama studio dan nomor WA di
+          halaman berikutnya — akun baru perlu disetujui admin sebelum bisa dipakai.
+        </p>
+      </header>
+
+      <GoogleButton />
+
+      <p className="center lede">
+        Sudah punya akun? <Link className="link" href="/login">Masuk</Link>
+      </p>
+    </div>
+  );
+}
+
 function NoRegistration() {
   return (
     <div className="card stack">
@@ -91,7 +116,7 @@ function NoRegistration() {
       <h1>Akun ini belum punya pendaftaran.</h1>
       <p className="lede">
         Login berhasil, tapi tidak ada permintaan akses studio yang tertaut ke akun ini.
-        Daftar dulu supaya admin bisa meninjau; akun yang sama akan dipakai lagi.
+        Daftar dulu supaya admin bisa meninjau; akun Google yang sama akan dipakai lagi.
       </p>
       <Link className="btn btn--primary" href="/register">
         Daftar sekarang

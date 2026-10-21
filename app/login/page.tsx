@@ -1,154 +1,31 @@
-"use client";
-
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Suspense, useState } from "react";
-import { browserClient } from "@/lib/supabase-browser";
-import { isSchemaError, type DbError } from "@/lib/db-errors";
-import { DbNotReady } from "@/app/_components/DbNotReady";
+import { Suspense } from "react";
 import { GoogleButton } from "@/app/_components/GoogleButton";
 import { OAuthErrorNotice } from "./OAuthErrorNotice";
 
 /**
- * Login form. Text is Indonesian, matching the rest of the app.
+ * Login page — Google only. The email/password form is gone, so this page no longer
+ * needs to be a client component and no longer decides where the visitor goes.
  *
- * The post-login decision is made here rather than in the server page because the
- * session cookie only exists after the browser client has written it — redirecting
- * from a server component in the same round trip would race that write.
+ * That decision now lives in one place: `/auth/callback`, which already knows all five
+ * outcomes (studio → /admin, admin → /admin, registration incomplete → /onboarding,
+ * registration pending → /onboarding, no registration → /register?error=no_registration).
+ * Doing it here as well would mean two copies of the same rule.
  *
- * Three outcomes, not two:
- *   photographers row                  → /admin
- *   no row, but is_admin() is true     → /admin   (an admin needs no studio of his own)
- *   no row, not an admin               → "Akunmu belum disetujui admin."
+ * Two error channels survive, both Google-only:
+ *   GoogleButton's own box        — `signInWithOAuth` rejected (provider disabled…)
+ *   OAuthErrorNotice              — GoTrue bounced back to /login with ?error_code=…
+ *                                   (redirect URL not on the allow-list)
  *
- * The admin branch calls RPC `is_admin()` (0005, grant `authenticated`) on the session
- * client — never a service-role client, which would carry no `auth.uid()`.
- *
- * "Belum disetujui" is a real state, not an error: signup is open, access is not.
- * A user who is not a photographer yet stays on this page with a logout button so
- * they are not stuck in a redirect loop between /login and /admin.
- *
- * A *schema* error is neither: it means the migrations are not applied, and saying
- * "not approved" there is what locked the admin out of his own panel. It gets its own
- * screen with the PostgREST code on it.
+ * A visitor with no session lands here; there is nothing to gate.
  */
 export default function LoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-  const [notReady, setNotReady] = useState<DbError | null>(null);
-
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
-      const supabase = browserClient();
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-
-      if (signInError) {
-        setError("Email atau password salah.");
-        return;
-      }
-
-      // "Do I own a studio?" is asked with `current_photographer_id()` (0004), NOT with a
-      // plain select on `photographers`. Since 0010 added `photographers_admin_select`
-      // (`using (is_admin())`), `.limit(1)` returns *some other* photographer's row for an
-      // admin, so the branch below only looked right by accident of ordering.
-      const { data: studioId, error: rowError } =
-        await supabase.rpc("current_photographer_id");
-
-      if (rowError) {
-        if (isSchemaError(rowError.code)) {
-          setNotReady(rowError);
-          return;
-        }
-        setError("Gagal memeriksa status akun. Coba lagi.");
-        return;
-      }
-
-      if (!studioId) {
-        // No studio row. An admin still gets in — /admin is where he approves people.
-        const { data: admin, error: adminError } = await supabase.rpc("is_admin");
-
-        if (adminError) {
-          if (isSchemaError(adminError.code)) {
-            setNotReady(adminError);
-            return;
-          }
-          setError("Gagal memeriksa status akun. Coba lagi.");
-          return;
-        }
-
-        if (admin !== true) {
-          setPending(true);
-          return;
-        }
-      }
-
-      // Client-side navigation is safe here: the browser client has already written
-      // the session cookie before `signInWithPassword` resolved, and `router.refresh()`
-      // makes the destination render on the server with that cookie.
-      router.replace("/admin");
-      router.refresh();
-    } catch {
-      setError("Tidak bisa menghubungi server. Coba lagi.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function logout() {
-    // browserClient().auth.signOut(), not a server route: the browser client keeps
-    // the session in memory and its auto-refresh would rewrite the cookies after a
-    // server-side-only sign-out, resurrecting the session. Signing out through the
-    // client that holds it is what actually ends it.
-    await browserClient().auth.signOut();
-    setPending(false);
-    setNotReady(null);
-    setPassword("");
-    router.refresh();
-  }
-
-  if (notReady) {
-    return (
-      <main className="shell">
-        <DbNotReady error={notReady}>
-          <button type="button" className="btn btn--secondary" onClick={logout}>
-            Keluar
-          </button>
-        </DbNotReady>
-      </main>
-    );
-  }
-
-  if (pending) {
-    return (
-      <main className="shell">
-        <div className="card stack">
-          <p className="eyebrow">Menunggu persetujuan</p>
-          <h1>Akunmu belum disetujui admin.</h1>
-          <p className="lede">
-            Pendaftaranmu sudah masuk. Admin akan meninjau dan mengaktifkan akses
-            studio. Kamu bisa login lagi setelah disetujui.
-          </p>
-          <button type="button" className="btn btn--secondary" onClick={logout}>
-            Keluar
-          </button>
-        </div>
-      </main>
-    );
-  }
-
   return (
     <main className="shell">
       <div className="stack">
         <header className="stack">
           <p className="eyebrow">Masuk</p>
-          <h1>Login fotografer</h1>
+          <h1>Masuk dengan akun Google</h1>
           <p className="lede">Kelola jadwal dan slot sesi foto kamu.</p>
         </header>
 
@@ -157,46 +34,7 @@ export default function LoginPage() {
             <OAuthErrorNotice />
           </Suspense>
           <GoogleButton />
-          <p className="center lede">atau pakai email dan password</p>
         </div>
-
-        <form className="card stack" onSubmit={submit} noValidate>
-          <div className="field">
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-
-          <div className="field">
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-
-          {error ? (
-            <p className="field-error" role="alert">
-              {error}
-            </p>
-          ) : null}
-
-          <button type="submit" className="btn btn--primary" disabled={busy} aria-busy={busy || undefined}>
-            {busy ? "Memeriksa…" : "Masuk"}
-          </button>
-        </form>
 
         <p className="center lede">
           Belum punya akun? <Link className="link" href="/register">Daftar di sini</Link>
