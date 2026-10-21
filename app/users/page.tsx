@@ -8,7 +8,7 @@ import { DbNotReady } from "@/app/_components/DbNotReady";
 import { readStats } from "./stats";
 import { UsersList } from "./UsersList";
 
-export const metadata = { title: "Users — Admin" };
+export const metadata = { title: "Fotografer — Admin" };
 
 // Everything here depends on the session and on a live query; no static shell.
 export const instant = false;
@@ -62,9 +62,10 @@ async function Content() {
     <div className="stack">
       <header className="stack">
         <p className="eyebrow">Admin</p>
-        <h1>Users</h1>
+        <h1>Fotografer</h1>
         <p className="lede">
-          Statistik per studio. Angka dihitung database saat halaman dimuat.
+          Daftar studio. Arsipkan untuk menyembunyikan studio dari halaman publik tanpa
+          menghapus datanya; hapus hanya berlaku untuk studio yang belum punya event.
         </p>
       </header>
 

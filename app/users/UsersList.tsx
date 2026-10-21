@@ -1,8 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { rupiah } from "@/lib/format";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { PhotographerStat } from "./stats";
 
 type Payload = { stats: PhotographerStat[]; search: string };
@@ -10,15 +8,20 @@ type Payload = { stats: PhotographerStat[]; search: string };
 const DEBOUNCE_MS = 300;
 
 /**
- * Search box + result cards.
+ * Search box + one row per photographer, with archive / unarchive / delete.
  *
  * The search runs on the server: every keystroke (after 300ms of quiet) hits
  * /api/admin/users?search=…, which calls `admin_photographer_stats(p_search)`. Rows are
- * never filtered in this component — `p_search` does the name/email substring match in
- * Postgres, so what is on screen is what the database matched.
+ * never filtered here — `p_search` does the name/email substring match in Postgres, so what
+ * is on screen is what the database matched.
  *
- * `initial` is the first page render (server-rendered), so the list is populated before any
- * JavaScript runs and an empty query needs no extra request on mount.
+ * Writes go to the same route (POST) and then re-read the *current* search, not the initial
+ * one: after archiving, the row must come back marked, and after deleting, it must be gone —
+ * both come from the database, not from a local flag that could disagree with it.
+ *
+ * Ordering is presentational only: active rows first, archived rows last, each group keeping
+ * the RPC's order. Archived rows are never hidden — `/users` is the only place "Pulihkan"
+ * can live.
  *
  * Stale responses are dropped by sequence number, not by abort: a slow "st" answering after
  * a fast "studio" would otherwise overwrite the newer results.
@@ -29,43 +32,85 @@ export function UsersList({ initial }: { initial: Payload }) {
   const [shownFor, setShownFor] = useState(initial.search);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [working, setWorking] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const seq = useRef(0);
+
+  const load = useCallback(async (term: string) => {
+    const mine = ++seq.current;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/users?search=${encodeURIComponent(term)}`, {
+        cache: "no-store",
+      });
+      const payload = (await res.json().catch(() => null)) as
+        | (Payload & { error?: string; message?: string })
+        | null;
+
+      if (mine !== seq.current) return;
+
+      if (!res.ok) {
+        setError(payload?.message ?? "Pencarian gagal. Coba lagi.");
+        return;
+      }
+      setRows(payload?.stats ?? []);
+      setShownFor(payload?.search ?? term);
+    } catch {
+      if (mine === seq.current) setError("Tidak bisa menghubungi server. Coba lagi.");
+    } finally {
+      if (mine === seq.current) setBusy(false);
+    }
+  }, []);
 
   useEffect(() => {
     // The server render already answered this exact query.
     if (query.trim() === shownFor) return;
 
-    const mine = ++seq.current;
-    const timer = setTimeout(async () => {
-      setBusy(true);
-      setError(null);
-      try {
-        const res = await fetch(`/api/admin/users?search=${encodeURIComponent(query.trim())}`, {
-          cache: "no-store",
-        });
-        const payload = (await res.json().catch(() => null)) as
-          | (Payload & { error?: string; message?: string })
-          | null;
-
-        if (mine !== seq.current) return;
-
-        if (!res.ok) {
-          setError(payload?.message ?? "Pencarian gagal. Coba lagi.");
-          return;
-        }
-        setRows(payload?.stats ?? []);
-        setShownFor(payload?.search ?? query.trim());
-      } catch {
-        if (mine === seq.current) setError("Tidak bisa menghubungi server. Coba lagi.");
-      } finally {
-        if (mine === seq.current) setBusy(false);
-      }
-    }, DEBOUNCE_MS);
-
+    const timer = setTimeout(() => void load(query.trim()), DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [query, shownFor]);
+  }, [query, shownFor, load]);
+
+  async function act(row: PhotographerStat, action: "archive" | "unarchive" | "delete") {
+    const studio = row.display_name || row.slug;
+
+    if (action === "delete" && !window.confirm(`Hapus ${studio}? Fotografer dengan event tidak bisa dihapus.`)) {
+      return;
+    }
+
+    setRowError(null);
+    setWorking(row.photographer_id);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photographer_id: row.photographer_id, action }),
+      });
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        setRowError({
+          id: row.photographer_id,
+          message: body?.message ?? "Gagal memproses. Coba lagi.",
+        });
+        return;
+      }
+
+      await load(shownFor);
+    } catch {
+      setRowError({ id: row.photographer_id, message: "Tidak bisa menghubungi server." });
+    } finally {
+      setWorking(null);
+    }
+  }
 
   const term = shownFor.trim();
+
+  // Active first, archived last; `sort` is stable, so the RPC's order survives inside each
+  // group.
+  const ordered = [...rows].sort(
+    (a, b) => Number(a.archived_at != null) - Number(b.archived_at != null),
+  );
 
   return (
     <div className="stack">
@@ -90,7 +135,7 @@ export function UsersList({ initial }: { initial: Payload }) {
           reader user who cannot see the list re-render. */}
       <p className="lede" role="status" aria-live="polite">
         {busy
-          ? "Mencari…"
+          ? "Memuat…"
           : term
             ? `${rows.length} fotografer cocok dengan “${term}”`
             : `${rows.length} fotografer`}
@@ -102,7 +147,7 @@ export function UsersList({ initial }: { initial: Payload }) {
         </p>
       ) : null}
 
-      {rows.length === 0 && !busy ? (
+      {ordered.length === 0 && !busy ? (
         <div className="card stack">
           <h2>Tidak ada hasil</h2>
           <p className="lede">
@@ -117,102 +162,99 @@ export function UsersList({ initial }: { initial: Payload }) {
           </p>
         </div>
       ) : (
-        <div className="slots slots--cards">
-          {rows.map((row) => (
-            <PhotographerCard key={row.photographer_id} row={row} />
-          ))}
+        /* Focusable region: at 390px the table is wider than the screen, and a keyboard user
+           needs somewhere to put focus before the arrow keys can scroll it. */
+        <div className="table-wrap" role="region" aria-label="Daftar fotografer" tabIndex={0}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th scope="col">Studio</th>
+                <th scope="col">Instagram</th>
+                <th scope="col">WA</th>
+                <th scope="col">Status</th>
+                <th scope="col">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ordered.map((row) => {
+                // `!= null` (loose) on purpose: a database that has not had 0019 applied
+                // returns no `archived_at` at all, and `undefined !== null` would label
+                // every studio as archived.
+                const archived = row.archived_at != null;
+                const isWorking = working === row.photographer_id;
+                const err = rowError?.id === row.photographer_id ? rowError.message : null;
+
+                return (
+                  <tr key={row.photographer_id} data-archived={archived || undefined}>
+                    <th scope="row">{row.display_name || row.slug}</th>
+                    <td data-label="Instagram">
+                      {row.instagram ? (
+                        <a
+                          className="link mono"
+                          href={`https://www.instagram.com/${row.instagram}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          @{row.instagram}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="mono" data-label="WA">
+                      {row.contact_wa || "—"}
+                    </td>
+                    <td data-label="Status">
+                      <span className={`badge badge--${archived ? "draft" : "published"}`}>
+                        {archived ? "Diarsipkan" : "Aktif"}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="btn-row btn-row--inline">
+                        {archived ? (
+                          <button
+                            type="button"
+                            className="btn btn--secondary"
+                            disabled={isWorking}
+                            aria-busy={isWorking || undefined}
+                            onClick={() => act(row, "unarchive")}
+                          >
+                            Pulihkan
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn--secondary"
+                            disabled={isWorking}
+                            aria-busy={isWorking || undefined}
+                            onClick={() => act(row, "archive")}
+                          >
+                            Arsipkan
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="btn btn--danger"
+                          disabled={isWorking}
+                          onClick={() => act(row, "delete")}
+                        >
+                          Hapus
+                        </button>
+                      </div>
+
+                      {err ? (
+                        <p className="slot-row__error" role="alert">
+                          {err}
+                        </p>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
-  );
-}
-
-/**
- * One photographer. Numbers come from the RPC as-is — nothing here sums or derives money.
- *
- * Two labels are deliberately careful:
- *  - "Nilai booking terisi" + "belum tentu sudah dibayar": `revenue_idr` is the price of
- *    booked slots, and this project has no payments table. Calling it revenue or income
- *    would claim money that may never have moved.
- *  - "Event selesai" carries its definition inline: every day of the event is in the past
- *    (WIB). It is not the `closed` status, which means the event was withdrawn.
- */
-function PhotographerCard({ row }: { row: PhotographerStat }) {
-  return (
-    <article className="card stack">
-      <div className="day-block__head">
-        <h2>{row.display_name || "(tanpa nama)"}</h2>
-        <span className="badge badge--draft mono">{row.slug}</span>
-      </div>
-
-      <dl className="summary">
-        <div>
-          <dt>Email</dt>
-          <dd>
-            {row.email ? (
-              <span className="mono">{row.email}</span>
-            ) : (
-              /* A photographer row without user_id has no account yet — 0010 returns
-                 NULL for the email. "belum punya akun" says that; an empty cell would
-                 read as a rendering bug. */
-              <span className="lede">belum punya akun</span>
-            )}
-          </dd>
-        </div>
-
-        <div>
-          <dt>Kontak WA</dt>
-          <dd>{row.contact_wa ? <span className="mono">{row.contact_wa}</span> : "—"}</dd>
-        </div>
-
-        <div>
-          <dt>Event</dt>
-          <dd>
-            {row.events_total}
-            <span className="hint"> · {row.events_published} terbit</span>
-          </dd>
-        </div>
-
-        <div>
-          <dt>Event selesai</dt>
-          <dd>{row.events_done}</dd>
-        </div>
-
-        <div>
-          <dt>Slot</dt>
-          <dd>{row.slots_total}</dd>
-        </div>
-
-        <div>
-          <dt>Booking</dt>
-          <dd>{row.bookings_total}</dd>
-        </div>
-
-        <div>
-          <dt>Nilai booking terisi</dt>
-          <dd>
-            {/* NULL = no booked slot at all (sum over no rows). "—" not "Rp0": zero would
-                claim a real total of zero, when the honest statement is "nothing filled". */}
-            {row.revenue_idr === null ? "—" : rupiah(row.revenue_idr)}
-          </dd>
-        </div>
-      </dl>
-
-      {/* The two definitions that make the numbers above honest. They live here, not inline
-          in the <dt>: a label long enough to hold the explanation pushes the value out of
-          the row at 390px (`.summary div` is a flex row with `dt: flex 0 0 auto`). */}
-      <p className="hint">
-        <strong>Nilai booking terisi</strong> = harga slot yang sudah dipesan — belum tentu
-        sudah dibayar, proyek ini belum mencatat pembayaran. <strong>Event selesai</strong> =
-        semua hari event sudah lewat; bukan status ditutup.
-      </p>
-
-      <Link
-        className="btn btn--secondary"
-        href={`/admin/events/new?for=${row.photographer_id}`}
-      >
-        Buat event
-      </Link>
-    </article>
   );
 }

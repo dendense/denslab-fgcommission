@@ -7,7 +7,7 @@ import { DbNotMigratedError, throwIfSchemaError } from "@/lib/db-errors";
 import { ServerNotReady } from "@/app/_components/ServerNotReady";
 import { DbNotReady } from "@/app/_components/DbNotReady";
 import { GoogleButton } from "@/app/_components/GoogleButton";
-import { ResubmitButton } from "@/app/_components/ResubmitButton";
+import { StartRegistrationButton } from "@/app/_components/StartRegistrationButton";
 
 export const metadata = { title: "Daftar — Booking Sesi Foto" };
 
@@ -22,19 +22,21 @@ export const instant = false;
  * `handle_new_user` trigger (0005) puts it in the approval queue, and the studio name +
  * WhatsApp number are filled in afterwards on /onboarding — never here.
  *
- * Six answers for a visitor, in this order:
+ * Five answers for a visitor, in this order:
  *
  *   no session                       → the Google button
  *   photographers row                → /admin
  *   no row, but is_admin() is true   → /admin  (an admin needs no studio of his own)
  *   status 'pending'                 → "Menunggu persetujuan admin"
- *   status 'rejected'                → "Pendaftaran ditolak" + the admin's note + Ajukan ulang
- *   no access_requests row           → the Google button (nothing to wait for yet)
+ *   no access_requests row           → "Daftar sebagai fotografer" (start_registration)
  *
- * The two status cards read `my_registration_status()` (0017). Before this, the page
- * concluded "waiting" from "signed in ∧ no studio ∧ not admin" and never looked at the
- * status — so a rejected user was told to wait for an approval that had already happened
- * and been refused. The status is the only thing that can tell those two apart.
+ * A legacy `rejected` row is treated as no row at all: since 0019 a rejection DELETES the
+ * row, so `rejected` only survives as leftover data in a database that has not been cleaned
+ * up. The user's route back is the same one: start a new registration.
+ *
+ * The waiting card reads `my_registration_status()` (0017/0018), which answers from the
+ * caller's own row only. Before 0017 this page concluded "waiting" from "signed in ∧ no
+ * studio ∧ not admin" and never looked at the status.
  *
  * The gate is here rather than in the browser so the redirect is a real HTTP one and the
  * button markup never leaves the server for a signed-in user.
@@ -68,13 +70,12 @@ async function View({ searchParams }: Props) {
   }
 }
 
-/** `my_registration_status()` (0013, `note` since 0017) — the caller's own row only. */
+/** `my_registration_status()` (0013) — the caller's own row only. */
 type Registration = {
   status: string;
   studio_name: string | null;
   contact_wa: string | null;
   email: string | null;
-  note: string | null;
 };
 
 async function Content(searchParams: Props["searchParams"]) {
@@ -107,14 +108,16 @@ async function Content(searchParams: Props["searchParams"]) {
 
   const registration = ((rows ?? []) as Registration[])[0];
 
-  if (!registration) {
-    // Arrived from /auth/callback with a session but no row: say so here, where signup
-    // lives, and keep the button — signing in again is what creates the row.
-    return <NoRegistration email={auth.user.email ?? ""} fromCallback={searchError === "no_registration"} />;
-  }
-
-  if (registration.status === "rejected") {
-    return <Rejected email={registration.email ?? auth.user.email ?? ""} note={registration.note} />;
+  // A legacy `rejected` row falls in here on purpose: 0019 makes rejection delete the row,
+  // so `rejected` is leftover data, not a state this page can act on. The card below is the
+  // only route back into the queue.
+  if (!registration || registration.status === "rejected") {
+    return (
+      <NoRegistration
+        email={registration?.email ?? auth.user.email ?? ""}
+        fromCallback={searchError === "no_registration"}
+      />
+    );
   }
 
   // `pending` is the only remaining status: `approved` would have a studio row and was
@@ -147,15 +150,14 @@ function Signup() {
 function NoRegistration({ email, fromCallback }: { email: string; fromCallback: boolean }) {
   return (
     <div className="card stack">
-      <p className="eyebrow">Pendaftaran tidak ditemukan</p>
-      <h1>Akun ini belum punya pendaftaran.</h1>
+      <p className="eyebrow">Belum terdaftar</p>
+      <h1>Daftar sebagai fotografer.</h1>
       <p className="lede">
         {fromCallback ? "Login berhasil, tapi tidak" : "Tidak"} ada permintaan akses studio
-        yang tertaut ke akun{email ? <> <strong>{email}</strong></> : null}. Masuk dengan
-        Google sekali lagi supaya pendaftaranmu masuk ke antrian admin; akun Google yang
-        sama akan dipakai lagi.
+        yang tertaut ke akun{email ? <> <strong>{email}</strong></> : null}. Tekan tombol di
+        bawah untuk masuk ke antrian admin; akun Google yang sama akan dipakai lagi.
       </p>
-      <GoogleButton />
+      <StartRegistrationButton />
     </div>
   );
 }
@@ -171,42 +173,6 @@ function Pending({ email }: { email: string }) {
       </p>
       <Link className="btn btn--secondary" href="/onboarding">
         Lengkapi data studio
-      </Link>
-    </div>
-  );
-}
-
-/**
- * `note` is whatever `reject_access_request()` stored as `p_note` (0005) — the admin may
- * have refused without writing one, so it is optional, not "tidak ada alasan" filler.
- *
- * "Ajukan ulang" resets the row to `pending` and keeps the studio data (0017), which is why
- * this card does not ask the user to retype anything: if the admin wanted different data,
- * /onboarding is one tap away and now accepts edits while `rejected`.
- */
-function Rejected({ email, note }: { email: string; note: string | null }) {
-  const reason = note?.trim();
-
-  return (
-    <div className="card stack">
-      <p className="eyebrow">Pendaftaran ditolak</p>
-      <h1>Pendaftaranmu belum diterima admin.</h1>
-      <p className="lede">
-        Admin menolak permintaan akses untuk <strong>{email}</strong>. Kamu bisa memperbaiki
-        data studio, lalu mengajukan ulang tanpa membuat akun baru.
-      </p>
-
-      {reason ? (
-        <div className="notice notice--warn">
-          <p className="eyebrow">Alasan dari admin</p>
-          <p>{reason}</p>
-        </div>
-      ) : null}
-
-      <ResubmitButton />
-
-      <Link className="btn btn--secondary" href="/onboarding">
-        Ubah data studio dulu
       </Link>
     </div>
   );

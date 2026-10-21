@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-type Field = "studio_name" | "contact_wa";
+type Field = "studio_name" | "contact_wa" | "instagram";
 
 type Body = {
   error?: string;
@@ -14,12 +14,16 @@ type Body = {
 };
 
 /**
- * Studio name + WA, posted to /api/onboarding.
+ * Studio name + WA + Instagram, posted to /api/onboarding.
  *
- * Field errors land under the input that caused them, never in a toast: `invalid_studio_name`
- * and `invalid_contact_wa` are the database's verdict (0013), and a floating message leaves
- * the user guessing which of the two boxes to fix. The route returns `field` for exactly
- * that reason — this component does not re-implement the thresholds.
+ * Field errors land under the input that caused them, never in a toast: `invalid_studio_name`,
+ * `invalid_contact_wa` and `invalid_instagram` are the database's verdict (0013/0018), and a
+ * floating message leaves the user guessing which box to fix. The route returns `field` for
+ * exactly that reason — this component does not re-implement the thresholds.
+ *
+ * Instagram is optional and the "@" is decoration, not a value: the user types the username
+ * only, and the body carries `null` when the box is empty so the database stores "not filled"
+ * rather than an empty string.
  *
  * Success calls `router.refresh()`: the server component re-reads
  * `my_registration_status()` and renders the "Menunggu persetujuan" card. No manual
@@ -32,23 +36,18 @@ type Body = {
 export function OnboardingForm({
   initialStudioName,
   initialContactWa,
+  initialInstagram,
   changing,
-  doneHref,
 }: {
   initialStudioName: string;
   initialContactWa: string;
+  initialInstagram: string;
   changing: boolean;
-  /**
-   * Where to go after a successful save. `/onboarding?edit=1` re-renders the form it is
-   * already on, which is fine while `pending` (the field values are the feedback) but not
-   * while `rejected`: there the user needs to land back on the status card, where the
-   * "Ajukan ulang" button is. Omitted → `router.refresh()`, the existing behaviour.
-   */
-  doneHref?: string;
 }) {
   const router = useRouter();
   const [studioName, setStudioName] = useState(initialStudioName);
   const [contactWa, setContactWa] = useState(initialContactWa);
+  const [instagram, setInstagram] = useState(initialInstagram);
   const [busy, setBusy] = useState(false);
   const [fieldError, setFieldError] = useState<{ field: Field | null; message: string } | null>(
     null,
@@ -65,7 +64,13 @@ export function OnboardingForm({
       const res = await fetch("/api/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studio_name: studioName, contact_wa: contactWa }),
+        body: JSON.stringify({
+          studio_name: studioName,
+          contact_wa: contactWa,
+          // Empty → null, never "": the database stores null for "not filled" and the public
+          // page must not render an empty "@".
+          instagram: instagram.trim() === "" ? null : instagram.trim(),
+        }),
       });
 
       if (!res.ok) {
@@ -78,8 +83,7 @@ export function OnboardingForm({
         return;
       }
 
-      if (doneHref) router.push(doneHref);
-      else router.refresh();
+      router.refresh();
     } catch {
       setFormError({ message: "Tidak bisa menghubungi server. Coba lagi." });
     } finally {
@@ -89,6 +93,7 @@ export function OnboardingForm({
 
   const nameError = fieldError?.field === "studio_name" ? fieldError.message : null;
   const waError = fieldError?.field === "contact_wa" ? fieldError.message : null;
+  const igError = fieldError?.field === "instagram" ? fieldError.message : null;
 
   return (
     <form className="card stack" onSubmit={submit} noValidate>
@@ -135,6 +140,39 @@ export function OnboardingForm({
           </p>
         ) : (
           <p className="hint">Dipakai klien untuk menghubungi kamu. Boleh format +62.</p>
+        )}
+      </div>
+
+      {/* Optional: the database stores null when empty, and the public page renders nothing
+          rather than a bare "@". */}
+      <div className="field">
+        <label htmlFor="instagram">Instagram</label>
+        <div className="field__control">
+          <span className="field__prefix" aria-hidden="true">
+            @
+          </span>
+          <input
+            id="instagram"
+            name="instagram"
+            type="text"
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder="namastudio"
+            value={instagram}
+            onChange={(e) => setInstagram(e.target.value)}
+            aria-invalid={igError ? true : undefined}
+            aria-describedby={igError ? "instagram-error" : "instagram-hint"}
+          />
+        </div>
+        {igError ? (
+          <p className="field-error" id="instagram-error" role="alert">
+            {igError}
+          </p>
+        ) : (
+          <p className="hint" id="instagram-hint">
+            Opsional. Tulis username saja — huruf, angka, titik, dan garis bawah.
+          </p>
         )}
       </div>
 

@@ -1,4 +1,4 @@
-// Onboarding write: `complete_registration(p_studio_name, p_contact_wa)` (0013).
+// Onboarding write: `complete_registration(p_studio_name, p_contact_wa, p_instagram)` (0018).
 //
 // Session client, NOT the service role. 0013 grants execute on this function to
 // `authenticated` only; the function keys off `auth.uid()` and writes only the caller's
@@ -9,15 +9,19 @@ import { configErrorResponse } from "@/lib/supabase";
 import { requireUser } from "@/lib/auth";
 import { isSchemaError } from "@/lib/db-errors";
 
-type Body = { studio_name?: unknown; contact_wa?: unknown };
+type Body = { studio_name?: unknown; contact_wa?: unknown; instagram?: unknown };
 
 /**
- * POST /api/onboarding  body: { studio_name, contact_wa }
+ * POST /api/onboarding  body: { studio_name, contact_wa, instagram }
  *
  * Field errors come back as `field` so the form can put the sentence under the input that
- * caused it — `invalid_studio_name` under the name, `invalid_contact_wa` under the WA.
- * The database is the authority on both thresholds (name ≥ 2 chars, WA ≥ 8 digits);
- * duplicating them here would drift.
+ * caused it — `invalid_studio_name` under the name, `invalid_contact_wa` under the WA,
+ * `invalid_instagram` under the username. The database is the authority on all three
+ * thresholds (name ≥ 2 chars, WA ≥ 8 digits, IG `[A-Za-z0-9._]{1,30}`); duplicating them
+ * here would drift.
+ *
+ * `instagram` empty (or whitespace, or absent) is sent as `null`, not `"":` the column's
+ * "not filled" value is NULL and the public page keys off that to render nothing.
  */
 export async function POST(request: Request) {
   const guard = await requireUser();
@@ -35,11 +39,13 @@ export async function POST(request: Request) {
 
   const studioName = typeof body.studio_name === "string" ? body.studio_name : "";
   const contactWa = typeof body.contact_wa === "string" ? body.contact_wa : "";
+  const instagram = typeof body.instagram === "string" && body.instagram.trim() ? body.instagram : null;
 
   try {
     const { data, error } = await guard.supabase.rpc("complete_registration", {
       p_studio_name: studioName,
       p_contact_wa: contactWa,
+      p_instagram: instagram,
     });
 
     if (error) {
@@ -71,6 +77,17 @@ export async function POST(request: Request) {
             error: "invalid_contact_wa",
             field: "contact_wa",
             message: "Nomor WA minimal 8 digit angka. Contoh: 081234567890.",
+          },
+          { status: 422 },
+        );
+      }
+      if (/invalid_instagram/.test(message)) {
+        return Response.json(
+          {
+            error: "invalid_instagram",
+            field: "instagram",
+            message:
+              "Username Instagram hanya boleh huruf, angka, titik, dan garis bawah — maksimal 30 karakter. Contoh: namastudio.",
           },
           { status: 422 },
         );

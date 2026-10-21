@@ -7,7 +7,6 @@ import { DbNotMigratedError, throwIfSchemaError } from "@/lib/db-errors";
 import { ServerNotReady } from "@/app/_components/ServerNotReady";
 import { DbNotReady } from "@/app/_components/DbNotReady";
 import { LogoutButton } from "@/app/admin/LogoutButton";
-import { ResubmitButton } from "@/app/_components/ResubmitButton";
 import { OnboardingForm } from "./OnboardingForm";
 
 export const metadata = { title: "Lengkapi data studio — Booking Sesi Foto" };
@@ -43,24 +42,24 @@ type Registration = {
   contact_wa: string | null;
   email: string | null;
   note: string | null;
+  instagram: string | null;
 };
 
 /**
- * The landing page for a Google signup, and the place a password signup can top up.
+ * The landing page for a Google signup.
  *
- * Reads `my_registration_status()` (0013; `note` since 0017) — the caller's own row,
- * `security definer`, granted to `authenticated` only. Not a select on `access_requests`:
- * that would need the caller to know his own user_id and would put the "which row is mine"
- * rule in two places.
+ * Reads `my_registration_status()` (0013; `note` since 0017, `instagram` since 0018) — the
+ * caller's own row, `security definer`, granted to `authenticated` only. Not a select on
+ * `access_requests`: that would need the caller to know his own user_id and would put the
+ * "which row is mine" rule in two places.
  *
  * Branch table, top to bottom:
  *   no session                     → /login
  *   no registration row            → "tidak punya pendaftaran" + /register
  *   approved                       → /admin
- *   rejected                       → refusal + admin's note + "Ajukan ulang"
- *                                    (`?edit=1` opens the form instead: 0017 lets a
- *                                    rejected row be filled in, so "perbaiki dulu" is a
- *                                    real path and not a dead end)
+ *   rejected (legacy row)          → /register, where a new registration is started; since
+ *                                    0019 a rejection deletes the row, so this state is
+ *                                    leftover data with no form to edit
  *   pending, fields empty          → form
  *   pending, fields filled         → waiting card (+ `?edit=1` re-opens the form)
  */
@@ -101,57 +100,20 @@ async function Content(searchParams: Props["searchParams"]) {
 
   const studioName = registration.studio_name?.trim() ?? "";
   const contactWa = registration.contact_wa?.trim() ?? "";
+  const instagram = registration.instagram?.trim() ?? "";
   const complete = studioName.length > 0 && contactWa.length > 0;
 
   if (registration.status === "rejected") {
     const reason = registration.note?.trim();
-
-    // `?edit=1`: the form, with the refusal still visible above it. 0017 lets
-    // `complete_registration` write a rejected row, so the user fixes his own data instead
-    // of asking an admin to edit the database.
-    if (edit === "1") {
-      return (
-        <div className="stack">
-          <header className="stack">
-            <p className="eyebrow">Pendaftaran ditolak</p>
-            <h1>Perbaiki data studio</h1>
-            <p className="lede">
-              {reason
-                ? "Alasan penolakan ada di bawah. Setelah datanya diperbaiki, ajukan ulang dari halaman status."
-                : "Perbaiki data studio, lalu ajukan ulang dari halaman status."}
-            </p>
-          </header>
-
-          {reason ? (
-            <div className="notice notice--warn">
-              <p className="eyebrow">Alasan dari admin</p>
-              <p>{reason}</p>
-            </div>
-          ) : null}
-
-          <OnboardingForm
-            initialStudioName={studioName}
-            initialContactWa={contactWa}
-            changing
-            doneHref="/onboarding"
-          />
-
-          <Link className="btn btn--secondary" href="/onboarding">
-            Batal, kembali ke status
-          </Link>
-          <LogoutButton />
-        </div>
-      );
-    }
 
     return (
       <div className="card stack">
         <p className="eyebrow">Pendaftaran ditolak</p>
         <h1>Akses studio belum diberikan.</h1>
         <p className="lede">
-          Admin menolak permintaan akses untuk <strong>{registration.email}</strong>. Data
-          yang kamu kirim masih tersimpan — kamu bisa memperbaikinya, lalu mengajukan ulang
-          tanpa membuat akun baru.
+          Admin menolak permintaan akses untuk <strong>{registration.email}</strong>.
+          Pendaftaran yang ditolak sudah dihapus, jadi datanya tidak bisa diperbaiki — mulai
+          pendaftaran baru dari halaman daftar.
         </p>
 
         {reason ? (
@@ -161,10 +123,8 @@ async function Content(searchParams: Props["searchParams"]) {
           </div>
         ) : null}
 
-        <ResubmitButton />
-
-        <Link className="btn btn--secondary" href="/onboarding?edit=1">
-          Ubah data studio dulu
+        <Link className="btn btn--primary" href="/register">
+          Ke halaman daftar
         </Link>
 
         <LogoutButton />
@@ -191,6 +151,10 @@ async function Content(searchParams: Props["searchParams"]) {
             <div>
               <dt>Nomor WA</dt>
               <dd className="mono">{contactWa}</dd>
+            </div>
+            <div>
+              <dt>Instagram</dt>
+              <dd className="mono">{instagram ? `@${instagram}` : "—"}</dd>
             </div>
           </div>
 
@@ -227,6 +191,7 @@ async function Content(searchParams: Props["searchParams"]) {
       <OnboardingForm
         initialStudioName={studioName || (own?.display_name ?? "")}
         initialContactWa={contactWa}
+        initialInstagram={instagram}
         changing={complete}
       />
 

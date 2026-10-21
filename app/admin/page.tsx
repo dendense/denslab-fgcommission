@@ -127,8 +127,9 @@ async function Content() {
             <p className="eyebrow">Pendaftaran ditolak</p>
             <h1>Akses studio belum diberikan.</h1>
             <p className="lede">
-              Admin menolak permintaan akses untuk <strong>{auth.user.email}</strong>. Kamu
-              bisa memperbaiki data studio lalu mengajukan ulang dari halaman status.
+              Admin menolak permintaan akses untuk <strong>{auth.user.email}</strong>.
+              Pendaftaran yang ditolak sudah dihapus, jadi mulai pendaftaran baru dari
+              halaman daftar.
             </p>
             {reason ? (
               <div className="notice notice--warn">
@@ -137,7 +138,7 @@ async function Content() {
               </div>
             ) : null}
             <Link className="btn btn--primary" href="/register">
-              Buka status pendaftaran
+              Buka halaman daftar
             </Link>
             <LogoutButton />
           </div>
@@ -172,7 +173,7 @@ async function Content() {
     listError = true;
   }
 
-  const queue = admin ? await readQueue(supabase) : { pending: [], rejected: [] };
+  const queue = admin ? await readQueue(supabase) : { pending: [] };
 
   return (
     <div className="stack">
@@ -186,11 +187,11 @@ async function Content() {
         <section className="stack">
           <h2>Pendaftar</h2>
           <p className="lede">
-            Menyetujui membuatkan studio untuk pendaftar itu. Menolak tidak menghapus
-            akunnya — hanya menutup akses; pendaftar yang ditolak tetap bisa mengajukan
-            ulang sendiri, dan kamu bisa memulihkannya dari tab Ditolak.
+            Menyetujui membuatkan studio untuk pendaftar itu. Menolak <strong>menghapus</strong>{" "}
+            pendaftarannya — akun Google-nya tetap ada, tapi dia harus mendaftar ulang dari
+            awal lewat tombol di halaman daftar.
           </p>
-          <AccessRequests pending={queue.pending} rejected={queue.rejected} />
+          <AccessRequests pending={queue.pending} />
         </section>
       ) : null}
 
@@ -259,47 +260,28 @@ async function Content() {
 }
 
 /**
- * The queue, both tabs, in one read per status.
+ * The queue: pending rows only, in arrival order.
  *
- * `rejected` is here because 0017 made it actionable: without it an admin had no way to
- * undo a rejection from the UI, and the applicant vanished from the page entirely.
- * `decided_at` + `note` are selected for that tab (when and why), and `note` is null for
- * a rejection written without a reason — the component prints nothing rather than
- * "tanpa alasan".
+ * `rejected` used to be read here too (0017 made it actionable). 0019 deletes the row on
+ * rejection, so there is nothing to list and no restore button to offer — reading a status
+ * that no longer exists would only produce an always-empty tab.
  *
  * A missing `access_requests` table is "not migrated", not "empty": `throwIfSchemaError`
- * turns it into the DbNotReady card instead of two empty tabs.
+ * turns it into the DbNotReady card instead of an empty queue.
  */
 async function readQueue(supabase: SupabaseClient) {
-  const select = "id,email,display_name,studio_name,contact_wa,status,requested_at,decided_at,note";
+  const { data, error } = await supabase
+    .from("access_requests")
+    .select("id,email,display_name,studio_name,contact_wa,status,requested_at")
+    .eq("status", "pending")
+    .order("requested_at", { ascending: true });
 
-  const [pending, rejected] = await Promise.all([
-    supabase
-      .from("access_requests")
-      .select(select)
-      .eq("status", "pending")
-      .order("requested_at", { ascending: true }),
-    supabase
-      .from("access_requests")
-      .select(select)
-      .eq("status", "rejected")
-      .order("decided_at", { ascending: false }),
-  ]);
-
-  for (const [label, result] of [
-    ["pending", pending],
-    ["rejected", rejected],
-  ] as const) {
-    if (result.error) {
-      console.error(`admin: access_requests ${label} read`, result.error);
-      throwIfSchemaError(result.error);
-    }
+  if (error) {
+    console.error("admin: access_requests pending read", error);
+    throwIfSchemaError(error);
   }
 
-  return {
-    pending: (pending.data ?? []) as AccessRequest[],
-    rejected: (rejected.data ?? []) as AccessRequest[],
-  };
+  return { pending: (data ?? []) as AccessRequest[] };
 }
 
 /**
@@ -326,11 +308,11 @@ async function AdminWithoutStudio({
       <section className="stack">
         <h2>Pendaftar</h2>
         <p className="lede">
-          Menyetujui membuatkan studio untuk pendaftar itu. Menolak tidak menghapus
-          akunnya — hanya menutup akses; pendaftar yang ditolak tetap bisa mengajukan
-          ulang sendiri, dan kamu bisa memulihkannya dari tab Ditolak.
+          Menyetujui membuatkan studio untuk pendaftar itu. Menolak <strong>menghapus</strong>{" "}
+          pendaftarannya — akun Google-nya tetap ada, tapi dia harus mendaftar ulang dari
+          awal lewat tombol di halaman daftar.
         </p>
-        <AccessRequests pending={queue.pending} rejected={queue.rejected} />
+        <AccessRequests pending={queue.pending} />
       </section>
 
       <section className="stack">

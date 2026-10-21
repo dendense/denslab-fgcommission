@@ -8,9 +8,11 @@ import { requireAdmin } from "@/lib/auth";
 import { isUuid } from "@/lib/bookings";
 
 /**
- * GET /api/admin/access-requests            → pending only (the default queue)
+ * GET /api/admin/access-requests            → pending only (the queue)
  * GET /api/admin/access-requests?status=all → every request, any status
- * GET /api/admin/access-requests?status=rejected → the rejected tab
+ *
+ * `?status=rejected` was removed with the rejected tab: since 0019 a rejection deletes the
+ * row, so that filter can only ever answer with an empty list.
  */
 export async function GET(request: Request) {
   const guard = await requireAdmin();
@@ -21,14 +23,10 @@ export async function GET(request: Request) {
   try {
     let query = guard.supabase
       .from("access_requests")
-      .select(
-        "id,user_id,email,display_name,studio_name,contact_wa,status,requested_at,decided_at,note",
-      )
+      .select("id,user_id,email,display_name,studio_name,contact_wa,status,requested_at,decided_at,note")
       .order("requested_at", { ascending: true });
 
-    if (status === "rejected") {
-      query = query.eq("status", "rejected").order("decided_at", { ascending: false });
-    } else if (status !== "all") {
+    if (status !== "all") {
       query = query.eq("status", "pending");
     }
 
@@ -58,19 +56,22 @@ export async function GET(request: Request) {
 
 /**
  * POST /api/admin/access-requests
- * body: { request_id: uuid, action: "approve" | "reject" | "restore", note?: string }
+ * body: { request_id: uuid, action: "approve" | "reject" }
  *
  * Approve creates the photographer row (slug generated in SQL) and returns it, so
  * the caller can show the studio slug without a second round trip.
  *
- * `restore` is `admin_restore_access_request(uuid)` (0017): a rejected row back to
- * `pending`, so the admin can change his mind without a SQL editor. The status rule lives
- * in that function, not here — see the migration for why.
+ * Reject DELETES the request row (0019) and the function returns `void`, so the response
+ * body carries `result: null` for it. That is the honest answer — the row is gone, and
+ * returning a copy would make the UI print "rejected" for something no longer in the queue.
+ *
+ * `p_note` is not sent: 0019 keeps the parameter only so old callers do not fail PGRST202,
+ * and throws the value away. Sending it would pretend a reason was stored.
  */
 
-type Body = { request_id?: unknown; action?: unknown; note?: unknown };
+type Body = { request_id?: unknown; action?: unknown };
 
-const ACTIONS = ["approve", "reject", "restore"] as const;
+const ACTIONS = ["approve", "reject"] as const;
 type Action = (typeof ACTIONS)[number];
 
 export async function POST(request: Request) {
@@ -89,7 +90,6 @@ export async function POST(request: Request) {
 
   const requestId = typeof body.request_id === "string" ? body.request_id : "";
   const action = typeof body.action === "string" ? body.action : "";
-  const note = typeof body.note === "string" && body.note.trim() ? body.note.trim() : null;
 
   if (!isUuid(requestId)) {
     return Response.json(
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
   }
   if (!ACTIONS.includes(action as Action)) {
     return Response.json(
-      { error: "invalid_request", message: 'action harus "approve", "reject", atau "restore".' },
+      { error: "invalid_request", message: 'action harus "approve" atau "reject".' },
       { status: 400 },
     );
   }
@@ -108,14 +108,7 @@ export async function POST(request: Request) {
     const { data, error } =
       action === "approve"
         ? await guard.supabase.rpc("approve_access_request", { p_request_id: requestId })
-        : action === "restore"
-          ? await guard.supabase.rpc("admin_restore_access_request", {
-              p_request_id: requestId,
-            })
-          : await guard.supabase.rpc("reject_access_request", {
-              p_request_id: requestId,
-              p_note: note,
-            });
+        : await guard.supabase.rpc("reject_access_request", { p_request_id: requestId });
 
     if (error) {
       const message = error.message ?? "";
@@ -128,10 +121,8 @@ export async function POST(request: Request) {
       if (/invalid_state/.test(message)) {
         const text =
           action === "approve"
-            ? "Permintaan ini sudah ditolak sebelumnya."
-            : action === "restore"
-              ? "Hanya pendaftaran yang ditolak yang bisa dipulihkan ke antrian."
-              : "Permintaan ini sudah diputuskan.";
+            ? "Permintaan ini sudah diputuskan."
+            : "Pendaftaran ini sudah diputuskan, jadi tidak bisa ditolak lagi. Muat ulang halaman.";
         return Response.json({ error: "invalid_state", message: text }, { status: 409 });
       }
       if (/incomplete_registration/.test(message)) {

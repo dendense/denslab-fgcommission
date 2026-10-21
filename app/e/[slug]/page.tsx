@@ -60,6 +60,19 @@ async function EventView({ params, searchParams }: Props) {
           ) : null}
           <div>
             <strong>Fotografer:</strong> {data.photographer.display_name ?? "—"}
+            {data.photographer.instagram ? (
+              <>
+                {" · "}
+                <a
+                  className="link mono"
+                  href={`https://www.instagram.com/${data.photographer.instagram}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  @{data.photographer.instagram}
+                </a>
+              </>
+            ) : null}
           </div>
           <div>
             <strong>Slot tersedia:</strong> {totalOpen} dari {allSlots.length}
