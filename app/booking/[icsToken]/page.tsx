@@ -17,6 +17,17 @@ export const instant = false;
 
 type Props = { params: Promise<{ icsToken: string }> };
 
+/**
+ * `photographers.instagram` is stored without a leading `@`, but rows typed in by
+ * hand (or before 0018's validation) may carry one. Normalise in one place so
+ * neither the URL nor the visible handle can ever show `@@`.
+ * Missing field (pre-0020 payload) and null both give null → WhatsApp fallback.
+ */
+function instagramHandle(raw: string | null | undefined): string | null {
+  const handle = raw?.trim().replace(/^@+/, "");
+  return handle || null;
+}
+
 export default function Page({ params }: Props) {
   return (
     <main className="shell">
@@ -67,6 +78,22 @@ async function Confirmation({ params }: Props) {
     photographer.contact_wa,
     `Halo ${photographer.display_name ?? ""}, saya ${booking.client_name} sudah booking sesi foto ${event.title} pada ${dateWIB(slot.starts_at)} jam ${rangeWIB(slot.starts_at, slot.ends_at)}.`,
   );
+
+  // `instagram` arrives only once 0020 is applied; until then the key is absent
+  // (undefined), which `instagramHandle` treats exactly like null.
+  const ig = instagramHandle(photographer.instagram);
+
+  // Instagram when the photographer has one, WhatsApp otherwise. Both null → no
+  // button at all: this page is the client's only post-booking contact route and
+  // an empty `href` or a bare `wa.me/` would be worse than no button.
+  const contact = ig
+    ? {
+        href: `https://www.instagram.com/${encodeURIComponent(ig)}`,
+        label: `Hubungi fotografer lewat Instagram (@${ig})`,
+      }
+    : wa
+      ? { href: wa, label: "Hubungi fotografer lewat WhatsApp" }
+      : null;
 
   return (
     <div className="stack">
@@ -133,12 +160,13 @@ async function Confirmation({ params }: Props) {
         <a className="btn btn--secondary" href={icsUrl} download>
           Unduh .ics
         </a>
-        {wa ? (
+        {contact ? (
           <a
             className="btn btn--secondary"
-            href={wa}
+            href={contact.href}
             target="_blank"
             rel="noopener noreferrer"
+            aria-label={contact.label}
           >
             Hubungi fotografer
           </a>
