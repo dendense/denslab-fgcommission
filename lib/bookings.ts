@@ -27,6 +27,7 @@ export type BookingDetail = {
   photographer: {
     display_name: string | null;
     contact_wa: string | null;
+    instagram?: string | null; // added by migration 0020; absent before it is applied
   };
 };
 
